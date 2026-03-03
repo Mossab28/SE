@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marine Control Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Supervision terre - mer</p>
+        <h1>Tableau de bord embarque</h1>
+      </div>
+      <div class="topbar-meta">
+        <div class="status-chip status-live">
+          <span class="status-dot"></span>
+          <span>Flux pret a connecter</span>
+        </div>
+        <div class="timestamp-block">
+          <span class="label">Derniere mise a jour</span>
+          <strong id="last-update">--:--:--</strong>
+        </div>
+      </div>
+    </header>
+
+    <main class="dashboard-grid">
+      <section class="panel hero-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Vue operative</p>
+          <h2>Etat general du bateau</h2>
+        </div>
+        <div class="hero-layout">
+          <div class="readout-card large">
+            <span class="readout-label">Mission</span>
+            <strong id="mission-state">En attente de telemetrie</strong>
+            <p>La structure du dashboard est prete. Branchez ici la source de donnees du bateau.</p>
+          </div>
+          <div class="readout-column">
+            <div class="readout-card">
+              <span class="readout-label">Liaison terre / mer</span>
+              <strong id="link-state">Non connectee</strong>
+            </div>
+            <div class="readout-card">
+              <span class="readout-label">Niveau d'alerte</span>
+              <strong id="alert-state">Aucune alerte active</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Energie</p>
+          <h2>Batteries</h2>
+        </div>
+        <div class="metric-grid">
+          <article class="metric-card">
+            <span class="metric-name">Temperature batteries</span>
+            <strong class="metric-value" data-field="battery_temperature">--</strong>
+            <span class="metric-unit">degC</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-name">Voltage</span>
+            <strong class="metric-value" data-field="battery_voltage">--</strong>
+            <span class="metric-unit">V</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-name">Courant</span>
+            <strong class="metric-value" data-field="battery_current">--</strong>
+            <span class="metric-unit">A</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-name">Puissance</span>
+            <strong class="metric-value" data-field="battery_power">--</strong>
+            <span class="metric-unit">kW</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Propulsion</p>
+          <h2>Moteur</h2>
+        </div>
+        <div class="metric-grid">
+          <article class="metric-card">
+            <span class="metric-name">Temperature moteur</span>
+            <strong class="metric-value" data-field="motor_temperature">--</strong>
+            <span class="metric-unit">degC</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-name">Pression</span>
+            <strong class="metric-value" data-field="motor_pressure">--</strong>
+            <span class="metric-unit">bar</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-name">Vitesse</span>
+            <strong class="metric-value" data-field="motor_speed">--</strong>
+            <span class="metric-unit">rpm</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-name">Couple</span>
+            <strong class="metric-value" data-field="motor_torque">--</strong>
+            <span class="metric-unit">Nm</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Commande</p>
+          <h2>Controleur moteur</h2>
+        </div>
+        <div class="metric-grid">
+          <article class="metric-card">
+            <span class="metric-name">Mode</span>
+            <strong class="metric-value text" data-field="controller_mode">--</strong>
+            <span class="metric-unit">etat</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-name">Consigne puissance</span>
+            <strong class="metric-value" data-field="controller_power_request">--</strong>
+            <span class="metric-unit">%</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-name">Rendement estime</span>
+            <strong class="metric-value" data-field="controller_efficiency">--</strong>
+            <span class="metric-unit">%</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-name">Etat securite</span>
+            <strong class="metric-value text" data-field="controller_safety">--</strong>
+            <span class="metric-unit">status</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel status-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Integrite systeme</p>
+          <h2>Statuts critiques</h2>
+        </div>
+        <div class="status-list">
+          <div class="status-row">
+            <span>Alimentation principale</span>
+            <strong class="badge neutral" id="status-power">En attente</strong>
+          </div>
+          <div class="status-row">
+            <span>Refroidissement moteur</span>
+            <strong class="badge neutral" id="status-cooling">En attente</strong>
+          </div>
+          <div class="status-row">
+            <span>Controleur moteur</span>
+            <strong class="badge neutral" id="status-controller">En attente</strong>
+          </div>
+          <div class="status-row">
+            <span>Communication bateau / terre</span>
+            <strong class="badge neutral" id="status-comms">En attente</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel timeline-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Temps reel</p>
+          <h2>Journal de supervision</h2>
+        </div>
+        <ul class="event-list" id="event-list">
+          <li>Structure initialisee. Aucun flux de donnees n'est encore branche.</li>
+          <li>Prevoir une API, WebSocket ou MQTT pour remplir les indicateurs en direct.</li>
+          <li>Utiliser ce journal pour afficher alertes, pertes de liaison et changements de mode.</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
