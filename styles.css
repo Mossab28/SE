@@ -141,18 +141,23 @@ h2 {
   backdrop-filter: blur(14px);
 }
 
-.hero-panel {
-  grid-column: span 12;
+.spotlight-panel {
+  grid-column: span 8;
 }
 
-.panel:nth-child(2),
+.compact-overview {
+  grid-column: span 4;
+}
+
 .panel:nth-child(3),
-.panel:nth-child(4) {
+.panel:nth-child(4),
+.panel:nth-child(5) {
   grid-column: span 4;
 }
 
 .status-panel,
-.timeline-panel {
+.timeline-panel,
+.hero-panel {
   grid-column: span 6;
 }
 
@@ -164,6 +169,51 @@ h2 {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.8fr);
   gap: 18px;
+}
+
+.spotlight-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 0.7fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.temperature-spotlight {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 280px;
+  padding: 28px;
+  border-radius: 28px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(255, 252, 245, 0.95)),
+    radial-gradient(circle at top left, rgba(244, 185, 66, 0.24), transparent 30%);
+}
+
+.spotlight-value {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(5rem, 10vw, 8rem);
+  line-height: 0.9;
+  letter-spacing: -0.08em;
+}
+
+.spotlight-unit {
+  margin-top: 8px;
+  color: var(--sea);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.spotlight-aside {
+  display: grid;
+}
+
+.mini-overview-grid {
+  display: grid;
+  gap: 14px;
 }
 
 .readout-column {
@@ -181,6 +231,15 @@ h2 {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.92)),
     linear-gradient(135deg, rgba(244, 185, 66, 0.16), rgba(0, 124, 145, 0.18));
+}
+
+.readout-card.compact {
+  padding: 16px 18px;
+}
+
+.readout-card.compact strong {
+  font-size: clamp(1.2rem, 2vw, 1.6rem);
+  margin-bottom: 0;
 }
 
 .readout-label {
@@ -302,12 +361,27 @@ h2 {
   color: var(--sea);
 }
 
+.compact-hero-layout {
+  grid-template-columns: 1fr;
+}
+
+.compact-summary {
+  min-height: 0;
+}
+
+.compact-summary strong {
+  font-size: clamp(1.6rem, 2.3vw, 2.1rem);
+}
+
 @media (max-width: 1100px) {
-  .panel:nth-child(2),
+  .spotlight-panel,
+  .compact-overview,
   .panel:nth-child(3),
   .panel:nth-child(4),
+  .panel:nth-child(5),
   .status-panel,
-  .timeline-panel {
+  .timeline-panel,
+  .hero-panel {
     grid-column: span 12;
   }
 }
@@ -319,6 +393,7 @@ h2 {
   }
 
   .topbar,
+  .spotlight-layout,
   .hero-layout,
   .metric-grid,
   .status-row {

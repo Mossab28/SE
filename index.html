@@ -29,26 +29,44 @@
     </header>
 
     <main class="dashboard-grid">
-      <section class="panel hero-panel">
+      <section class="panel spotlight-panel">
         <div class="panel-heading">
-          <p class="eyebrow">Vue operative</p>
-          <h2>Etat general du bateau</h2>
+          <p class="eyebrow">Priorite accueil</p>
+          <h2>Temperature critique a surveiller</h2>
         </div>
-        <div class="hero-layout">
-          <div class="readout-card large">
+        <div class="spotlight-layout">
+          <div class="temperature-spotlight">
+            <span class="readout-label">Temperature batteries</span>
+            <strong class="spotlight-value" data-field="battery_temperature">--</strong>
+            <span class="spotlight-unit">degC</span>
+          </div>
+          <div class="spotlight-aside">
+            <div class="readout-card">
+              <span class="readout-label">Seuil visuel</span>
+              <strong>Lecture instantanee</strong>
+              <p>Zone reservee a l'indicateur le plus important lors de l'ouverture du site.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel compact-overview">
+        <div class="panel-heading">
+          <p class="eyebrow">Resume direct</p>
+          <h2>Etat rapide</h2>
+        </div>
+        <div class="mini-overview-grid">
+          <div class="readout-card compact">
             <span class="readout-label">Mission</span>
             <strong id="mission-state">En attente de telemetrie</strong>
-            <p>La structure du dashboard est prete. Branchez ici la source de donnees du bateau.</p>
           </div>
-          <div class="readout-column">
-            <div class="readout-card">
-              <span class="readout-label">Liaison terre / mer</span>
-              <strong id="link-state">Non connectee</strong>
-            </div>
-            <div class="readout-card">
-              <span class="readout-label">Niveau d'alerte</span>
-              <strong id="alert-state">Aucune alerte active</strong>
-            </div>
+          <div class="readout-card compact">
+            <span class="readout-label">Liaison terre / mer</span>
+            <strong id="link-state">Non connectee</strong>
+          </div>
+          <div class="readout-card compact">
+            <span class="readout-label">Niveau d'alerte</span>
+            <strong id="alert-state">Aucune alerte active</strong>
           </div>
         </div>
       </section>
@@ -175,6 +193,20 @@
           <li>Prevoir une API, WebSocket ou MQTT pour remplir les indicateurs en direct.</li>
           <li>Utiliser ce journal pour afficher alertes, pertes de liaison et changements de mode.</li>
         </ul>
+      </section>
+
+      <section class="panel hero-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Vue operative</p>
+          <h2>Etat general du bateau</h2>
+        </div>
+        <div class="hero-layout compact-hero-layout">
+          <div class="readout-card large compact-summary">
+            <span class="readout-label">Synthese</span>
+            <strong>Supervision prete</strong>
+            <p>Cette rubrique a ete reduite pour laisser la temperature dominante des l'accueil. Elle reste disponible en bas pour le contexte global.</p>
+          </div>
+        </div>
       </section>
     </main>
   </div>
