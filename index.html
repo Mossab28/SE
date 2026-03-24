@@ -13,8 +13,8 @@
   <div class="page-shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Supervision terre - mer</p>
-        <h1>Tableau de bord embarque</h1>
+        <p class="eyebrow">Telemetrie bateau</p>
+        <h1>Tableau de Bord</h1>
       </div>
       <div class="topbar-meta">
         <div class="status-chip status-live">
@@ -29,109 +29,133 @@
     </header>
 
     <main class="dashboard-grid">
+      <section class="panel watch-panel">
+        <div class="panel-heading">
+          <h2>Points critiques instantan&eacute;s</h2>
+        </div>
+        <div class="watch-list" id="watch-list">
+          <div class="watch-item watch-item-neutral">
+            <div>
+              <strong>Aucun point critique actif</strong>
+              <p>Seules les valeurs critiques instantan&eacute;es apparaitront ici automatiquement.</p>
+            </div>
+            <span class="watch-badge">Stable</span>
+          </div>
+        </div>
+      </section>
+
       <section class="panel spotlight-panel">
         <div class="panel-heading">
-          <p class="eyebrow">Priorite accueil</p>
-          <h2>Temperature critique a surveiller</h2>
+          <h2>Informations generales</h2>
         </div>
         <div class="spotlight-layout">
           <div class="temperature-spotlight">
-            <span class="readout-label">Temperature batteries</span>
-            <strong class="spotlight-value" data-field="battery_temperature">--</strong>
-            <span class="spotlight-unit">degC</span>
+            <div class="general-info-grid">
+              <div class="general-info-item">
+                <span class="readout-label">Temperature batteries</span>
+                <strong class="spotlight-value compact-spotlight" data-field="battery_temperature">--</strong>
+                <span class="spotlight-unit">degC</span>
+              </div>
+              <div class="general-info-item">
+                <span class="readout-label">Distance parcourue</span>
+                <strong class="spotlight-value compact-spotlight" data-field="boat_distance_km">--</strong>
+                <span class="spotlight-unit">km</span>
+              </div>
+              <div class="general-info-item">
+                <span class="readout-label">Duree d'utilisation</span>
+                <strong class="spotlight-value time-spotlight" data-field="boat_activity_duration">--</strong>
+                <span class="spotlight-unit">hh:mm:ss</span>
+              </div>
+            </div>
           </div>
           <div class="spotlight-aside">
-            <div class="readout-card">
-              <span class="readout-label">Seuil visuel</span>
-              <strong>Lecture instantanee</strong>
-              <p>Zone reservee a l'indicateur le plus important lors de l'ouverture du site.</p>
+            <div class="readout-card distance-card">
+              <span class="readout-label distance-label">Synthese mission</span>
+              <strong id="mission-state">En attente de telemetrie</strong>
+              <p>Kilometres cumules, duree active et temperature principale regroupes dans le bloc central.</p>
+              <div class="distance-meta">
+                <span class="readout-label">Niveau d'alerte</span>
+                <strong id="alert-state">Aucune alerte active</strong>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section class="panel compact-overview">
-        <div class="panel-heading">
-          <p class="eyebrow">Resume direct</p>
-          <h2>Etat rapide</h2>
-        </div>
-        <div class="mini-overview-grid">
-          <div class="readout-card compact">
-            <span class="readout-label">Mission</span>
-            <strong id="mission-state">En attente de telemetrie</strong>
-          </div>
-          <div class="readout-card compact">
-            <span class="readout-label">Liaison terre / mer</span>
-            <strong id="link-state">Non connectee</strong>
-          </div>
-          <div class="readout-card compact">
-            <span class="readout-label">Niveau d'alerte</span>
-            <strong id="alert-state">Aucune alerte active</strong>
-          </div>
-        </div>
-      </section>
-
       <section class="panel">
         <div class="panel-heading">
-          <p class="eyebrow">Energie</p>
           <h2>Batteries</h2>
         </div>
         <div class="metric-grid">
-          <article class="metric-card">
+          <article class="metric-card gauge-card" data-metric="battery_temperature">
             <span class="metric-name">Temperature batteries</span>
             <strong class="metric-value" data-field="battery_temperature">--</strong>
             <span class="metric-unit">degC</span>
+            <span class="metric-capacity">Capacite max 50 degC</span>
+            <div class="metric-gauge-arc" data-gauge="battery_temperature"></div>
           </article>
-          <article class="metric-card">
+          <article class="metric-card gauge-card" data-metric="battery_voltage">
             <span class="metric-name">Voltage</span>
             <strong class="metric-value" data-field="battery_voltage">--</strong>
             <span class="metric-unit">V</span>
+            <span class="metric-capacity">Plage utile 40 a 55 V</span>
+            <div class="metric-gauge-arc" data-gauge="battery_voltage"></div>
           </article>
-          <article class="metric-card">
+          <article class="metric-card" data-metric="battery_current">
             <span class="metric-name">Courant</span>
             <strong class="metric-value" data-field="battery_current">--</strong>
             <span class="metric-unit">A</span>
+            <span class="metric-capacity">Capacite max 180 A</span>
+            <div class="metric-bar"><span data-bar="battery_current"></span></div>
           </article>
-          <article class="metric-card">
+          <article class="metric-card" data-metric="battery_power">
             <span class="metric-name">Puissance</span>
             <strong class="metric-value" data-field="battery_power">--</strong>
             <span class="metric-unit">kW</span>
+            <span class="metric-capacity">Capacite max 10 kW</span>
+            <div class="metric-bar"><span data-bar="battery_power"></span></div>
           </article>
         </div>
       </section>
 
       <section class="panel">
         <div class="panel-heading">
-          <p class="eyebrow">Propulsion</p>
           <h2>Moteur</h2>
         </div>
         <div class="metric-grid">
-          <article class="metric-card">
+          <article class="metric-card gauge-card" data-metric="motor_temperature">
             <span class="metric-name">Temperature moteur</span>
             <strong class="metric-value" data-field="motor_temperature">--</strong>
             <span class="metric-unit">degC</span>
+            <span class="metric-capacity">Capacite max 100 degC</span>
+            <div class="metric-gauge-arc" data-gauge="motor_temperature"></div>
           </article>
-          <article class="metric-card">
+          <article class="metric-card gauge-card" data-metric="motor_pressure">
             <span class="metric-name">Pression</span>
             <strong class="metric-value" data-field="motor_pressure">--</strong>
             <span class="metric-unit">bar</span>
+            <span class="metric-capacity">Plage utile 0 a 4 bar</span>
+            <div class="metric-gauge-arc" data-gauge="motor_pressure"></div>
           </article>
-          <article class="metric-card">
+          <article class="metric-card" data-metric="motor_speed">
             <span class="metric-name">Vitesse</span>
             <strong class="metric-value" data-field="motor_speed">--</strong>
             <span class="metric-unit">rpm</span>
+            <span class="metric-capacity">Capacite max 3500 rpm</span>
+            <div class="metric-bar"><span data-bar="motor_speed"></span></div>
           </article>
-          <article class="metric-card">
+          <article class="metric-card" data-metric="motor_torque">
             <span class="metric-name">Couple</span>
             <strong class="metric-value" data-field="motor_torque">--</strong>
             <span class="metric-unit">Nm</span>
+            <span class="metric-capacity">Capacite max 250 Nm</span>
+            <div class="metric-bar"><span data-bar="motor_torque"></span></div>
           </article>
         </div>
       </section>
 
       <section class="panel">
         <div class="panel-heading">
-          <p class="eyebrow">Commande</p>
           <h2>Controleur moteur</h2>
         </div>
         <div class="metric-grid">
@@ -139,28 +163,35 @@
             <span class="metric-name">Mode</span>
             <strong class="metric-value text" data-field="controller_mode">--</strong>
             <span class="metric-unit">etat</span>
+            <span class="metric-capacity">Modes : Standby, Drive, Boost</span>
+            <div class="metric-bar text-bar"><span data-bar="controller_mode"></span></div>
           </article>
-          <article class="metric-card">
+          <article class="metric-card" data-metric="controller_power_request">
             <span class="metric-name">Consigne puissance</span>
             <strong class="metric-value" data-field="controller_power_request">--</strong>
             <span class="metric-unit">%</span>
+            <span class="metric-capacity">Capacite max 100 %</span>
+            <div class="metric-bar"><span data-bar="controller_power_request"></span></div>
           </article>
-          <article class="metric-card">
+          <article class="metric-card" data-metric="controller_efficiency">
             <span class="metric-name">Rendement estime</span>
             <strong class="metric-value" data-field="controller_efficiency">--</strong>
             <span class="metric-unit">%</span>
+            <span class="metric-capacity">Cible 70 a 100 %</span>
+            <div class="metric-bar"><span data-bar="controller_efficiency"></span></div>
           </article>
           <article class="metric-card">
             <span class="metric-name">Etat securite</span>
             <strong class="metric-value text" data-field="controller_safety">--</strong>
             <span class="metric-unit">status</span>
+            <span class="metric-capacity">Etats : Nominal, Warning, Fault</span>
+            <div class="metric-bar text-bar"><span data-bar="controller_safety"></span></div>
           </article>
         </div>
       </section>
 
       <section class="panel status-panel">
         <div class="panel-heading">
-          <p class="eyebrow">Integrite systeme</p>
           <h2>Statuts critiques</h2>
         </div>
         <div class="status-list">
@@ -183,9 +214,20 @@
         </div>
       </section>
 
+      <section class="panel compact-overview">
+        <div class="panel-heading">
+          <h2>Etat rapide</h2>
+        </div>
+        <div class="mini-overview-grid">
+          <div class="readout-card compact">
+            <span class="readout-label">Liaison terre / mer</span>
+            <strong id="link-state">Non connectee</strong>
+          </div>
+        </div>
+      </section>
+
       <section class="panel timeline-panel">
         <div class="panel-heading">
-          <p class="eyebrow">Temps reel</p>
           <h2>Journal de supervision</h2>
         </div>
         <ul class="event-list" id="event-list">
@@ -197,7 +239,6 @@
 
       <section class="panel hero-panel">
         <div class="panel-heading">
-          <p class="eyebrow">Vue operative</p>
           <h2>Etat general du bateau</h2>
         </div>
         <div class="hero-layout compact-hero-layout">
