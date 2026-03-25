@@ -1,34 +1,32 @@
 #include <TinyGPS++.h>
-#include <HardwareSerial.h>
+#include <HardwareSerial.h> // Librairie pour pouvoir utiliser le GPS attention penser à bien les installer
 
 TinyGPSPlus gps;
-HardwareSerial SerialGPS(1);
-unsigned long lastSend = 0;
+HardwareSerial SerialGPS(1); // UART1 de l'ESP32
 
 void setup() {
-  Serial.begin(115200);
-  SerialGPS.begin(9600, SERIAL_8N1, 16, 17);
-  Serial.println("GPS_SERIAL_READY");
+  Serial.begin(115200); // Pour lire dans le serial monitor
+  SerialGPS.begin(9600, SERIAL_8N1, 16, 17); // RX=16, TX=17
+  Serial.println("Lecture GPS en cours...");
 }
 
 void loop() {
+  // Lecture continue des données GPS
   while (SerialGPS.available() > 0) {
     gps.encode(SerialGPS.read());
   }
 
+  // Affichage si nouvelles données grâce à la librairie TinyGps ++, c'est des fonctions déjà intégrer dedans
   if (gps.location.isUpdated()) {
-    Serial.print("{\"gps_lat\":");
-    Serial.print(gps.location.lat(), 6);
-    Serial.print(",\"gps_lng\":");
-    Serial.print(gps.location.lng(), 6);
-    Serial.print(",\"gps_speed_kmh\":");
-    Serial.print(gps.speed.kmph(), 1);
-    Serial.print(",\"gps_satellites\":");
-    Serial.print(gps.satellites.value());
-    Serial.println("}");
-    lastSend = millis();
-  } else if (millis() - lastSend >= 1000) {
-    Serial.println("{\"gps_lat\":null,\"gps_lng\":null,\"gps_speed_kmh\":null,\"gps_satellites\":0}");
-    lastSend = millis();
+    Serial.println("------ Données GPS ------");
+    Serial.print("Latitude  : "); Serial.println(gps.location.lat(), 6);
+    Serial.print("Longitude : "); Serial.println(gps.location.lng(), 6);
+    Serial.print("Satellites: "); Serial.println(gps.satellites.value());
+
+    Serial.print("Vitesse   : ");
+    Serial.print(gps.speed.kmph());
+    Serial.println(" km/h");
+
+    Serial.println("-------------------------\n");
   }
 }

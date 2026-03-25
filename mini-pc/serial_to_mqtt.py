@@ -1,4 +1,4 @@
-"""Read ESP32 JSON from USB serial, publish to MQTT."""
+"""Read ESP32 text GPS data from USB serial, publish as JSON to MQTT."""
 from __future__ import annotations
 
 import json
@@ -15,7 +15,7 @@ load_dotenv()
 SERIAL_PORT = os.getenv("SERIAL_PORT", "COM3")
 SERIAL_BAUD = int(os.getenv("SERIAL_BAUD", "115200"))
 MQTT_HOST = os.getenv("MQTT_HOST", "212.227.88.180")
-MQTT_PORT = int(os.getenv("MQTT_PORT", "1884"))
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "nereides/telemetry")
 
 
@@ -46,27 +46,67 @@ def connect_mqtt() -> mqtt.Client:
             time.sleep(2)
 
 
+def parse_text_block(lines: list[str]) -> dict | None:
+    """Parse the text output from the existing ESP32 firmware.
+
+    Expected format:
+        ------ Données GPS ------
+        Latitude  : 48.268266
+        Longitude : 4.068358
+        Satellites: 4
+        Vitesse   : 0.37 km/h
+        -------------------------
+    """
+    data = {}
+    for line in lines:
+        if line.startswith("Latitude"):
+            data["gps_lat"] = float(line.split(":")[1].strip())
+        elif line.startswith("Longitude"):
+            data["gps_lng"] = float(line.split(":")[1].strip())
+        elif line.startswith("Satellites"):
+            data["gps_satellites"] = int(line.split(":")[1].strip())
+        elif line.startswith("Vitesse"):
+            data["gps_speed_kmh"] = float(line.split(":")[1].strip().replace("km/h", "").strip())
+
+    if "gps_lat" in data:
+        return data
+    return None
+
+
 def main() -> None:
     ser = connect_serial()
     mqtt_client = connect_mqtt()
 
     print(f"Bridge actif: {SERIAL_PORT} -> MQTT {MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC}")
 
+    block: list[str] = []
+    in_block = False
+
     while True:
         try:
             line = ser.readline().decode("utf-8", errors="ignore").strip()
-            if not line or not line.startswith("{"):
+            if not line:
                 continue
 
-            data = json.loads(line)
-            data["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-            data["source"] = "esp32_bateau"
+            if "Données GPS" in line or "Donnees GPS" in line:
+                in_block = True
+                block = []
+                continue
 
-            mqtt_client.publish(MQTT_TOPIC, json.dumps(data), qos=1)
-            print(f"Publie: {data}")
+            if in_block and line.startswith("-----"):
+                data = parse_text_block(block)
+                if data:
+                    data["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+                    data["source"] = "esp32_bateau"
+                    mqtt_client.publish(MQTT_TOPIC, json.dumps(data), qos=1)
+                    print(f"Publie: {data}")
+                in_block = False
+                block = []
+                continue
 
-        except json.JSONDecodeError:
-            print(f"JSON invalide ignore: {line[:80]}")
+            if in_block:
+                block.append(line)
+
         except serial.SerialException:
             print("Port serie perdu, reconnexion...")
             ser.close()

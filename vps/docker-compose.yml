@@ -52,7 +52,9 @@ services:
       - influxdb
 
   backend:
-    build: .
+    build:
+      context: ..
+      dockerfile: vps/Dockerfile
     container_name: backend-telemetry
     restart: unless-stopped
     ports:
