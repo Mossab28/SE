@@ -1,0 +1,75 @@
+services:
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: mossab
+      DOCKER_INFLUXDB_INIT_PASSWORD: mossab123influx
+      DOCKER_INFLUXDB_INIT_ORG: bateau
+      DOCKER_INFLUXDB_INIT_BUCKET: telemetry
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: mon-token-telemetry-2024
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: mossab
+      GF_SECURITY_ADMIN_PASSWORD: mossab123
+      GF_SERVER_ROOT_URL: http://212.227.88.180/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    depends_on:
+      - influxdb
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto-data:/mosquitto/data
+
+  telegraf:
+    image: telegraf:latest
+    container_name: telegraf
+    restart: unless-stopped
+    volumes:
+      - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      - mosquitto
+      - influxdb
+
+  backend:
+    build: .
+    container_name: backend-telemetry
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    environment:
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: mon-token-telemetry-2024
+      INFLUX_ORG: bateau
+      INFLUX_BUCKET: telemetry
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_TOPIC: nereides/telemetry
+    depends_on:
+      - mosquitto
+      - influxdb
+
+volumes:
+  influxdb-data:
+  grafana-data:
+  mosquitto-data:

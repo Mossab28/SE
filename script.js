@@ -13,6 +13,10 @@ const fields = {
   controller_safety: "--",
   boat_distance_km: "--",
   boat_activity_duration: "--",
+  gps_lat: "--",
+  gps_lng: "--",
+  gps_speed_kmh: "--",
+  gps_satellites: "--",
 };
 
 const statusConfig = {
@@ -54,9 +58,9 @@ let pollTimer;
 let ageTimer;
 let lastTelemetryAt = null;
 const gaugeState = {};
-const backendHost = window.location.hostname || "localhost";
-const backendHttpUrl = `http://${backendHost}:8000`;
-const backendWsUrl = `${window.location.protocol === "https:" ? "wss" : "ws"}://${backendHost}:8000/ws`;
+const backendHost = "212.227.88.180";
+const backendHttpUrl = `http://${backendHost}/backend`;
+const backendWsUrl = `ws://${backendHost}/ws`;
 
 function createGaugeMarkup() {
   return `
@@ -354,6 +358,16 @@ function scheduleReconnect() {
   reconnectTimer = window.setTimeout(connectRealtime, 2000);
 }
 
+function checkStaleness() {
+  if (lastTelemetryAt) {
+    const elapsed = (Date.now() - lastTelemetryAt.getTime()) / 1000;
+    if (elapsed > 5) {
+      window.dashboardBridge.setConnectionState(false);
+      window.dashboardBridge.pushEvent("Donnees stale — aucune trame depuis 5s.");
+    }
+  }
+}
+
 function connectRealtime() {
   socket = new WebSocket(backendWsUrl);
 
@@ -403,7 +417,10 @@ function startPolling() {
 
 function startAgeTicker() {
   clearInterval(ageTimer);
-  ageTimer = window.setInterval(stampUpdate, 1000);
+  ageTimer = window.setInterval(() => {
+    stampUpdate();
+    checkStaleness();
+  }, 1000);
 }
 
 connectRealtime();

@@ -1,24 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from datetime import datetime, timezone
 from typing import Any
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from influxdb_client import InfluxDBClient, Point, WritePrecision
+import paho.mqtt.client as mqtt
 from pydantic import BaseModel, ConfigDict
-
-app = FastAPI(title="Telemetry Bridge")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 class TelemetryFrame(BaseModel):
@@ -40,6 +34,10 @@ class TelemetryFrame(BaseModel):
     controller_safety: str | None = None
     boat_distance_km: float | None = None
     boat_activity_duration: str | None = None
+    gps_lat: float | None = None
+    gps_lng: float | None = None
+    gps_speed_kmh: float | None = None
+    gps_satellites: int | None = None
 
 
 latest_payload: dict[str, Any] = {
@@ -55,6 +53,10 @@ INFLUX_URL = os.getenv("INFLUX_URL")
 INFLUX_TOKEN = os.getenv("INFLUX_TOKEN")
 INFLUX_ORG = os.getenv("INFLUX_ORG")
 INFLUX_BUCKET = os.getenv("INFLUX_BUCKET")
+
+MQTT_HOST = os.getenv("MQTT_HOST")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_TOPIC = os.getenv("MQTT_TOPIC", "nereides/telemetry")
 
 if all([INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET]):
     influx_client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
@@ -114,6 +116,59 @@ async def broadcast(message: dict[str, Any]) -> None:
         clients.discard(client)
 
 
+_loop: asyncio.AbstractEventLoop | None = None
+
+
+async def _process_frame(frame: TelemetryFrame) -> None:
+    """Process a telemetry frame from any source (POST or MQTT)."""
+    fields = frame.model_dump(exclude={"timestamp", "source"}, exclude_none=True)
+    statuses = build_statuses(frame)
+    write_to_influx(frame)
+    latest_payload.update({
+        "connected": True,
+        "fields": fields,
+        "statuses": statuses,
+        "event": build_event(frame),
+    })
+    await broadcast(latest_payload)
+
+
+def _on_mqtt_message(client, userdata, msg):
+    """Called in MQTT thread — schedule coroutine on the main event loop."""
+    try:
+        raw = json.loads(msg.payload)
+        frame = TelemetryFrame(**raw)
+        if _loop is not None:
+            asyncio.run_coroutine_threadsafe(_process_frame(frame), _loop)
+    except Exception as exc:
+        print(f"MQTT parse error: {exc}")
+
+
+@asynccontextmanager
+async def lifespan(app):
+    global _loop
+    _loop = asyncio.get_event_loop()
+    if MQTT_HOST:
+        mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        mqtt_client.on_message = _on_mqtt_message
+        mqtt_client.connect(MQTT_HOST, MQTT_PORT)
+        mqtt_client.subscribe(MQTT_TOPIC, qos=1)
+        mqtt_client.loop_start()
+        print(f"MQTT subscriber: {MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC}")
+    yield
+
+
+app = FastAPI(title="Telemetry Bridge", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -126,20 +181,7 @@ def latest() -> dict[str, Any]:
 
 @app.post("/telemetry")
 async def ingest_telemetry(frame: TelemetryFrame) -> dict[str, str]:
-    fields = frame.model_dump(exclude={"timestamp", "source"}, exclude_none=True)
-    statuses = build_statuses(frame)
-    write_to_influx(frame)
-
-    latest_payload.update(
-        {
-            "connected": True,
-            "fields": fields,
-            "statuses": statuses,
-            "event": build_event(frame),
-        }
-    )
-
-    await broadcast(latest_payload)
+    await _process_frame(frame)
     return {"status": "accepted"}
 
 
