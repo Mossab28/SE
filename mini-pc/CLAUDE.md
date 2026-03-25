@@ -21,13 +21,13 @@ La chaîne complète : **ESP32 (GPS) → USB Serial → Mini PC → MQTT (4G) �
    └── Grafana (/grafana/)
         │
         ▼
-[Dashboard web] (GitHub Pages)
+[Dashboard web] (hébergé sur le VPS via Nginx)
 ```
 
 ## Ce qui est déjà fait
 
 - Le VPS tourne : Mosquitto, InfluxDB, Grafana, Telegraf, Backend (Docker Compose)
-- Le dashboard web est en ligne sur GitHub Pages
+- Le dashboard web est hébergé sur le VPS (Nginx reverse proxy)
 - Le firmware ESP32 est dans `../esp32/gps_serial.ino`
 - Le script bridge `serial_to_mqtt.py` est prêt dans ce dossier
 
