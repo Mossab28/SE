@@ -60,10 +60,6 @@ services:
     ports:
       - "8001:8000"
     environment:
-      INFLUX_URL: http://influxdb:8086
-      INFLUX_TOKEN: mon-token-telemetry-2024
-      INFLUX_ORG: bateau
-      INFLUX_BUCKET: telemetry
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
       MQTT_TOPIC: nereides/telemetry

@@ -10,7 +10,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from influxdb_client import InfluxDBClient, Point, WritePrecision
 import paho.mqtt.client as mqtt
 from pydantic import BaseModel, ConfigDict
 
@@ -47,20 +46,10 @@ latest_payload: dict[str, Any] = {
     "event": "Backend initialise. En attente de telemetrie.",
 }
 clients: set[WebSocket] = set()
-influx_writer = None
-
-INFLUX_URL = os.getenv("INFLUX_URL")
-INFLUX_TOKEN = os.getenv("INFLUX_TOKEN")
-INFLUX_ORG = os.getenv("INFLUX_ORG")
-INFLUX_BUCKET = os.getenv("INFLUX_BUCKET")
 
 MQTT_HOST = os.getenv("MQTT_HOST")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "nereides/telemetry")
-
-if all([INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET]):
-    influx_client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-    influx_writer = influx_client.write_api()
 
 
 def build_statuses(frame: TelemetryFrame) -> dict[str, dict[str, str]]:
@@ -83,26 +72,6 @@ def build_event(frame: TelemetryFrame) -> str:
     )
 
 
-def write_to_influx(frame: TelemetryFrame) -> None:
-    if influx_writer is None:
-        return
-
-    payload = frame.model_dump(exclude_none=True)
-    timestamp = payload.pop("timestamp", None) or datetime.now(timezone.utc).isoformat()
-    source = payload.pop("source", "simulator_local")
-
-    point = Point("telemetry").tag("source", source)
-
-    for key, value in payload.items():
-        if isinstance(value, (int, float)):
-            point.field(key, value)
-        else:
-            point.field(key, str(value))
-
-    point.time(timestamp, WritePrecision.NS)
-    influx_writer.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
-
-
 async def broadcast(message: dict[str, Any]) -> None:
     dead_clients: list[WebSocket] = []
 
@@ -123,7 +92,6 @@ async def _process_frame(frame: TelemetryFrame) -> None:
     """Process a telemetry frame from any source (POST or MQTT)."""
     fields = frame.model_dump(exclude={"timestamp", "source"}, exclude_none=True)
     statuses = build_statuses(frame)
-    write_to_influx(frame)
     latest_payload.update({
         "connected": True,
         "fields": fields,
