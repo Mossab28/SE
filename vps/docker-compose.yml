@@ -28,6 +28,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: mossab123
       GF_SERVER_ROOT_URL: http://212.227.88.180/grafana/
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: "500ms"
     depends_on:
       - influxdb
 
