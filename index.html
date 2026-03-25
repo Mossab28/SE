@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
   <div class="page-shell">
@@ -86,27 +87,30 @@
         <div class="panel-heading">
           <h2>Position GPS</h2>
         </div>
-        <div class="metric-grid">
-          <article class="metric-card">
-            <span class="metric-name">Latitude</span>
-            <strong class="metric-value" data-field="gps_lat">--</strong>
-            <span class="metric-unit">deg</span>
-          </article>
-          <article class="metric-card">
-            <span class="metric-name">Longitude</span>
-            <strong class="metric-value" data-field="gps_lng">--</strong>
-            <span class="metric-unit">deg</span>
-          </article>
-          <article class="metric-card">
-            <span class="metric-name">Vitesse</span>
-            <strong class="metric-value" data-field="gps_speed_kmh">--</strong>
-            <span class="metric-unit">km/h</span>
-          </article>
-          <article class="metric-card">
-            <span class="metric-name">Satellites</span>
-            <strong class="metric-value" data-field="gps_satellites">--</strong>
-            <span class="metric-unit">sats</span>
-          </article>
+        <div class="gps-layout">
+          <div id="map" class="gps-map"></div>
+          <div class="gps-metrics">
+            <article class="metric-card">
+              <span class="metric-name">Latitude</span>
+              <strong class="metric-value" data-field="gps_lat">--</strong>
+              <span class="metric-unit">deg</span>
+            </article>
+            <article class="metric-card">
+              <span class="metric-name">Longitude</span>
+              <strong class="metric-value" data-field="gps_lng">--</strong>
+              <span class="metric-unit">deg</span>
+            </article>
+            <article class="metric-card">
+              <span class="metric-name">Vitesse</span>
+              <strong class="metric-value" data-field="gps_speed_kmh">--</strong>
+              <span class="metric-unit">km/h</span>
+            </article>
+            <article class="metric-card">
+              <span class="metric-name">Satellites</span>
+              <strong class="metric-value" data-field="gps_satellites">--</strong>
+              <span class="metric-unit">sats</span>
+            </article>
+          </div>
         </div>
       </section>
 
@@ -280,6 +284,7 @@
     </main>
   </div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

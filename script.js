@@ -58,6 +58,9 @@ let pollTimer;
 let ageTimer;
 let lastTelemetryAt = null;
 const gaugeState = {};
+let map;
+let boatMarker;
+let boatTrail;
 const backendHost = "212.227.88.180";
 const backendHttpUrl = `http://${backendHost}/backend`;
 const backendWsUrl = `ws://${backendHost}/ws`;
@@ -313,6 +316,7 @@ window.dashboardBridge = {
   updateTelemetry(nextFields = {}) {
     Object.assign(fields, nextFields);
     renderFields();
+    updateMap();
     markTelemetryUpdate();
   },
   updateStatuses(nextStatuses = {}) {
@@ -331,7 +335,31 @@ window.dashboardBridge = {
   setConnectionState,
 };
 
+function initMap() {
+  const defaultPos = [48.3, 3.5];
+  map = L.map("map").setView(defaultPos, 13);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap",
+    maxZoom: 19,
+  }).addTo(map);
+
+  boatMarker = L.marker(defaultPos).addTo(map).bindPopup("Bateau Nereides");
+  boatTrail = L.polyline([], { color: "#006d7e", weight: 3, opacity: 0.7 }).addTo(map);
+}
+
+function updateMap() {
+  const lat = parseFloat(fields.gps_lat);
+  const lng = parseFloat(fields.gps_lng);
+  if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
+
+  const pos = [lat, lng];
+  boatMarker.setLatLng(pos);
+  boatTrail.addLatLng(pos);
+  map.setView(pos);
+}
+
 initialisePlaceholderState();
+initMap();
 
 appendEvent("Interface chargee. API/WebSocket/MQTT a connecter ulterieurement.");
 
@@ -411,7 +439,7 @@ async function pollLatestTelemetry() {
 
 function startPolling() {
   clearInterval(pollTimer);
-  pollTimer = window.setInterval(pollLatestTelemetry, 2000);
+  pollTimer = window.setInterval(pollLatestTelemetry, 500);
   pollLatestTelemetry();
 }
 
