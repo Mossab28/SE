@@ -3,378 +3,110 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Marine Control Dashboard</title>
+  <title>Nereides Pilot Interface</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body data-authenticated="true">
-  <section class="login-overlay" id="login-overlay" aria-labelledby="login-title" role="dialog" aria-modal="true" hidden>
-    <div class="login-backdrop" aria-hidden="true"></div>
-    <div class="login-card panel">
-      <div class="login-header">
-        <p class="eyebrow">Acces securise</p>
-        <h1 id="login-title">Connexion operateur</h1>
-        <p class="login-intro">Authentifiez-vous pour acceder au tableau de bord de supervision et aux donnees temps reel.</p>
-      </div>
-
-      <form class="login-form" id="login-form" autocomplete="on">
-        <label class="login-field">
-          <span>Identifiant</span>
-          <input id="login-username" type="text" name="username" placeholder="operateur" autocomplete="username" required />
-        </label>
-
-        <label class="login-field">
-          <span>Mot de passe</span>
-          <input id="login-password" type="password" name="password" placeholder="********" autocomplete="current-password" required />
-        </label>
-
-        <div class="login-options">
-          <label class="login-remember">
-            <input type="checkbox" name="remember" />
-            <span>Conserver la session</span>
-          </label>
-          <span class="login-link">Acces reserve aux comptes autorises</span>
-        </div>
-
-        <button type="submit" class="login-submit" id="login-submit">Entrer dans l'interface</button>
-        <p class="login-feedback" id="login-feedback" aria-live="polite"></p>
-      </form>
-
-      <div class="login-footer">
-        <div class="login-chip">
-          <span class="status-dot"></span>
-          <span>Supervision reservee aux comptes autorises</span>
-        </div>
-        <p>Le design reprend les panneaux et la palette du dashboard pour garder une transition visuelle coherente.</p>
-      </div>
-    </div>
-  </section>
-
-  <div class="page-shell">
-    <header class="topbar">
+  <main class="pilot-shell">
+    <header class="pilot-header">
       <div>
-        <p class="eyebrow">Telemetrie bateau</p>
-        <h1>Tableau de Bord</h1>
+        <p class="pilot-kicker">Nereides Pilot Interface</p>
+        <h1>Lecture telemetrie pilote</h1>
       </div>
-      <div class="topbar-meta">
-        <div class="status-chip status-live">
-          <span class="status-dot"></span>
-          <span>Flux pret a connecter</span>
+      <div class="header-meta">
+        <div class="signal-card">
+          <span class="signal-label">Liaison</span>
+          <strong id="link-state">Non connectee</strong>
         </div>
-        <div class="session-chip" id="session-chip" hidden>
-          <span>Session</span>
-          <strong id="session-user">--</strong>
-        </div>
-        <div class="timestamp-block">
-          <span class="label">Derniere mise a jour</span>
+        <div class="signal-card">
+          <span class="signal-label">Derniere mise a jour</span>
           <strong id="last-update">--:--:--</strong>
         </div>
-        <button type="button" class="logout-button" id="logout-button" hidden>Se deconnecter</button>
       </div>
     </header>
 
-    <main class="dashboard-grid">
-      <section class="panel priority-panel">
-        <div class="panel-heading">
-          <h2>Mesures prioritaires</h2>
-        </div>
-        <div class="priority-grid">
-          <article class="priority-card priority-card-featured">
-            <span class="priority-label">GPS vitesse</span>
-            <strong class="priority-value" data-field="gps_speed_kmh">--</strong>
-            <span class="priority-unit">km/h</span>
-          </article>
-          <article class="priority-card">
-            <span class="priority-label">CM FNB</span>
-            <strong class="priority-value priority-value-text" data-field="controller_safety">--</strong>
-            <span class="priority-unit">etat</span>
-          </article>
-          <article class="priority-card">
-            <span class="priority-label">Batterie SOC</span>
-            <strong class="priority-value" data-field="battery_voltage">--</strong>
-            <span class="priority-unit">V</span>
-          </article>
-          <article class="priority-card">
-            <span class="priority-label">Batterie TempMax</span>
-            <strong class="priority-value" data-field="battery_temperature">--</strong>
-            <span class="priority-unit">degC</span>
-          </article>
-          <article class="priority-card">
-            <span class="priority-label">Batterie Current</span>
-            <strong class="priority-value" data-field="battery_current">--</strong>
-            <span class="priority-unit">A</span>
-          </article>
-          <article class="priority-card">
-            <span class="priority-label">CM TempCM</span>
-            <strong class="priority-value" data-field="motor_temperature">--</strong>
-            <span class="priority-unit">degC</span>
-          </article>
-          <article class="priority-card">
-            <span class="priority-label">CM Current</span>
-            <strong class="priority-value" data-field="controller_power_request">--</strong>
-            <span class="priority-unit">%</span>
-          </article>
-        </div>
-      </section>
+    <section class="alert-banner" id="alert-banner">
+      <span class="alert-banner-label">Etat pilote</span>
+      <strong id="mission-state">En attente de telemetrie</strong>
+      <span id="alert-state">Aucune alerte active</span>
+    </section>
 
-      <section class="panel watch-panel">
-        <div class="panel-heading">
-          <h2>Points critiques instantan&eacute;s</h2>
-        </div>
-        <div class="watch-list" id="watch-list">
-          <div class="watch-item watch-item-neutral">
-            <div>
-              <strong>Aucun point critique actif</strong>
-              <p>Seules les valeurs critiques instantan&eacute;es apparaitront ici automatiquement.</p>
-            </div>
-            <span class="watch-badge">Stable</span>
-          </div>
-        </div>
-      </section>
+    <section class="priority-board" aria-label="Mesures prioritaires pilote">
+      <article class="pilot-card pilot-card-hero" data-tone-target="gps_speed_kmh">
+        <span class="pilot-card-label">GPS vitesse</span>
+        <strong class="pilot-card-value" data-field="gps_speed_kmh">--</strong>
+        <span class="pilot-card-unit">km/h</span>
+      </article>
 
-      <section class="panel spotlight-panel">
-        <div class="panel-heading">
-          <h2>Informations generales</h2>
-        </div>
-        <div class="spotlight-layout">
-          <div class="temperature-spotlight">
-            <div class="general-info-grid">
-              <div class="general-info-item">
-                <span class="readout-label">Temperature batteries</span>
-                <strong class="spotlight-value compact-spotlight" data-field="battery_temperature">--</strong>
-                <span class="spotlight-unit">degC</span>
-              </div>
-              <div class="general-info-item">
-                <span class="readout-label">Distance parcourue</span>
-                <strong class="spotlight-value compact-spotlight" data-field="boat_distance_km">--</strong>
-                <span class="spotlight-unit">km</span>
-              </div>
-              <div class="general-info-item">
-                <span class="readout-label">Duree d'utilisation</span>
-                <strong class="spotlight-value time-spotlight" data-field="boat_activity_duration">--</strong>
-                <span class="spotlight-unit">hh:mm:ss</span>
-              </div>
-            </div>
-          </div>
-          <div class="spotlight-aside">
-            <div class="readout-card distance-card">
-              <span class="readout-label distance-label">Synthese mission</span>
-              <strong id="mission-state">En attente de telemetrie</strong>
-              <p>Kilometres cumules, duree active et temperature principale regroupes dans le bloc central.</p>
-              <div class="distance-meta">
-                <span class="readout-label">Niveau d'alerte</span>
-                <strong id="alert-state">Aucune alerte active</strong>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <article class="pilot-card pilot-card-status" data-tone-target="controller_safety">
+        <span class="pilot-card-label">CM FNB</span>
+        <strong class="pilot-card-value pilot-card-value-text" data-field="controller_safety">--</strong>
+        <span class="pilot-card-unit">etat</span>
+      </article>
 
-      <section class="panel">
-        <div class="panel-heading">
-          <h2>Position GPS</h2>
-        </div>
-        <div class="gps-layout">
-          <div id="map" class="gps-map"></div>
-          <div class="gps-metrics">
-            <article class="metric-card">
-              <span class="metric-name">Latitude</span>
-              <strong class="metric-value" data-field="gps_lat">--</strong>
-              <span class="metric-unit">deg</span>
-            </article>
-            <article class="metric-card">
-              <span class="metric-name">Longitude</span>
-              <strong class="metric-value" data-field="gps_lng">--</strong>
-              <span class="metric-unit">deg</span>
-            </article>
-            <article class="metric-card">
-              <span class="metric-name">Vitesse</span>
-              <strong class="metric-value" data-field="gps_speed_kmh">--</strong>
-              <span class="metric-unit">km/h</span>
-            </article>
-            <article class="metric-card">
-              <span class="metric-name">Satellites</span>
-              <strong class="metric-value" data-field="gps_satellites">--</strong>
-              <span class="metric-unit">sats</span>
-            </article>
-          </div>
-        </div>
-      </section>
+      <article class="pilot-card" data-tone-target="battery_soc">
+        <span class="pilot-card-label">Batterie SOC</span>
+        <strong class="pilot-card-value" data-field="battery_soc">--</strong>
+        <span class="pilot-card-unit">%</span>
+      </article>
 
-      <section class="panel">
-        <div class="panel-heading">
-          <h2>Batteries</h2>
-        </div>
-        <div class="metric-grid">
-          <article class="metric-card gauge-card" data-metric="battery_temperature">
-            <span class="metric-name">Temperature batteries</span>
-            <strong class="metric-value" data-field="battery_temperature">--</strong>
-            <span class="metric-unit">degC</span>
-            <span class="metric-capacity">Capacite max 50 degC</span>
-            <div class="metric-gauge-arc" data-gauge="battery_temperature"></div>
-          </article>
-          <article class="metric-card gauge-card" data-metric="battery_voltage">
-            <span class="metric-name">Voltage</span>
-            <strong class="metric-value" data-field="battery_voltage">--</strong>
-            <span class="metric-unit">V</span>
-            <span class="metric-capacity">Plage utile 40 a 55 V</span>
-            <div class="metric-gauge-arc" data-gauge="battery_voltage"></div>
-          </article>
-          <article class="metric-card" data-metric="battery_current">
-            <span class="metric-name">Courant</span>
-            <strong class="metric-value" data-field="battery_current">--</strong>
-            <span class="metric-unit">A</span>
-            <span class="metric-capacity">Capacite max 180 A</span>
-            <div class="metric-bar"><span data-bar="battery_current"></span></div>
-          </article>
-          <article class="metric-card" data-metric="battery_power">
-            <span class="metric-name">Puissance</span>
-            <strong class="metric-value" data-field="battery_power">--</strong>
-            <span class="metric-unit">kW</span>
-            <span class="metric-capacity">Capacite max 10 kW</span>
-            <div class="metric-bar"><span data-bar="battery_power"></span></div>
-          </article>
-        </div>
-      </section>
+      <article class="pilot-card" data-tone-target="battery_temperature">
+        <span class="pilot-card-label">Batterie TempMax</span>
+        <strong class="pilot-card-value" data-field="battery_temperature">--</strong>
+        <span class="pilot-card-unit">degC</span>
+      </article>
 
-      <section class="panel">
-        <div class="panel-heading">
-          <h2>Moteur</h2>
-        </div>
-        <div class="metric-grid">
-          <article class="metric-card gauge-card" data-metric="motor_temperature">
-            <span class="metric-name">Temperature moteur</span>
-            <strong class="metric-value" data-field="motor_temperature">--</strong>
-            <span class="metric-unit">degC</span>
-            <span class="metric-capacity">Capacite max 100 degC</span>
-            <div class="metric-gauge-arc" data-gauge="motor_temperature"></div>
-          </article>
-          <article class="metric-card gauge-card" data-metric="motor_pressure">
-            <span class="metric-name">Pression</span>
-            <strong class="metric-value" data-field="motor_pressure">--</strong>
-            <span class="metric-unit">bar</span>
-            <span class="metric-capacity">Plage utile 0 a 4 bar</span>
-            <div class="metric-gauge-arc" data-gauge="motor_pressure"></div>
-          </article>
-          <article class="metric-card" data-metric="motor_speed">
-            <span class="metric-name">Vitesse</span>
-            <strong class="metric-value" data-field="motor_speed">--</strong>
-            <span class="metric-unit">rpm</span>
-            <span class="metric-capacity">Capacite max 3500 rpm</span>
-            <div class="metric-bar"><span data-bar="motor_speed"></span></div>
-          </article>
-          <article class="metric-card" data-metric="motor_torque">
-            <span class="metric-name">Couple</span>
-            <strong class="metric-value" data-field="motor_torque">--</strong>
-            <span class="metric-unit">Nm</span>
-            <span class="metric-capacity">Capacite max 250 Nm</span>
-            <div class="metric-bar"><span data-bar="motor_torque"></span></div>
-          </article>
-        </div>
-      </section>
+      <article class="pilot-card" data-tone-target="battery_current">
+        <span class="pilot-card-label">Batterie Current</span>
+        <strong class="pilot-card-value" data-field="battery_current">--</strong>
+        <span class="pilot-card-unit">A</span>
+      </article>
 
-      <section class="panel">
-        <div class="panel-heading">
-          <h2>Controleur moteur</h2>
-        </div>
-        <div class="metric-grid">
-          <article class="metric-card">
-            <span class="metric-name">Mode</span>
-            <strong class="metric-value text" data-field="controller_mode">--</strong>
-            <span class="metric-unit">etat</span>
-            <span class="metric-capacity">Modes : Standby, Drive, Boost</span>
-            <div class="metric-bar text-bar"><span data-bar="controller_mode"></span></div>
-          </article>
-          <article class="metric-card" data-metric="controller_power_request">
-            <span class="metric-name">Consigne puissance</span>
-            <strong class="metric-value" data-field="controller_power_request">--</strong>
-            <span class="metric-unit">%</span>
-            <span class="metric-capacity">Capacite max 100 %</span>
-            <div class="metric-bar"><span data-bar="controller_power_request"></span></div>
-          </article>
-          <article class="metric-card" data-metric="controller_efficiency">
-            <span class="metric-name">Rendement estime</span>
-            <strong class="metric-value" data-field="controller_efficiency">--</strong>
-            <span class="metric-unit">%</span>
-            <span class="metric-capacity">Cible 70 a 100 %</span>
-            <div class="metric-bar"><span data-bar="controller_efficiency"></span></div>
-          </article>
-          <article class="metric-card">
-            <span class="metric-name">Etat securite</span>
-            <strong class="metric-value text" data-field="controller_safety">--</strong>
-            <span class="metric-unit">status</span>
-            <span class="metric-capacity">Etats : Nominal, Warning, Fault</span>
-            <div class="metric-bar text-bar"><span data-bar="controller_safety"></span></div>
-          </article>
-        </div>
-      </section>
+      <article class="pilot-card" data-tone-target="controller_temperature">
+        <span class="pilot-card-label">CM TempCM</span>
+        <strong class="pilot-card-value" data-field="controller_temperature">--</strong>
+        <span class="pilot-card-unit">degC</span>
+      </article>
 
-      <section class="panel status-panel">
-        <div class="panel-heading">
-          <h2>Statuts critiques</h2>
-        </div>
-        <div class="status-list">
-          <div class="status-row">
-            <span>Alimentation principale</span>
-            <strong class="badge neutral" id="status-power">En attente</strong>
-          </div>
-          <div class="status-row">
-            <span>Refroidissement moteur</span>
-            <strong class="badge neutral" id="status-cooling">En attente</strong>
-          </div>
-          <div class="status-row">
-            <span>Controleur moteur</span>
-            <strong class="badge neutral" id="status-controller">En attente</strong>
-          </div>
-          <div class="status-row">
-            <span>Communication bateau / terre</span>
-            <strong class="badge neutral" id="status-comms">En attente</strong>
-          </div>
-        </div>
-      </section>
+      <article class="pilot-card" data-tone-target="controller_current">
+        <span class="pilot-card-label">CM Current</span>
+        <strong class="pilot-card-value" data-field="controller_current">--</strong>
+        <span class="pilot-card-unit">A</span>
+      </article>
+    </section>
 
-      <section class="panel compact-overview">
-        <div class="panel-heading">
-          <h2>Etat rapide</h2>
-        </div>
-        <div class="mini-overview-grid">
-          <div class="readout-card compact">
-            <span class="readout-label">Liaison terre / mer</span>
-            <strong id="link-state">Non connectee</strong>
-          </div>
-        </div>
-      </section>
+    <section class="system-strip" aria-label="Etat systeme">
+      <div class="system-pill">
+        <span>Alimentation</span>
+        <strong class="badge neutral" id="status-power">En attente</strong>
+      </div>
+      <div class="system-pill">
+        <span>Refroidissement</span>
+        <strong class="badge neutral" id="status-cooling">En attente</strong>
+      </div>
+      <div class="system-pill">
+        <span>Controleur</span>
+        <strong class="badge neutral" id="status-controller">En attente</strong>
+      </div>
+      <div class="system-pill">
+        <span>Comms</span>
+        <strong class="badge neutral" id="status-comms">En attente</strong>
+      </div>
+    </section>
 
-      <section class="panel timeline-panel">
-        <div class="panel-heading">
-          <h2>Journal de supervision</h2>
-        </div>
-        <ul class="event-list" id="event-list">
-          <li>Structure initialisee. Aucun flux de donnees n'est encore branche.</li>
-          <li>Prevoir une API, WebSocket ou MQTT pour remplir les indicateurs en direct.</li>
-          <li>Utiliser ce journal pour afficher alertes, pertes de liaison et changements de mode.</li>
-        </ul>
-      </section>
+    <section class="timeline-panel">
+      <div class="panel-heading">
+        <h2>Journal supervision</h2>
+      </div>
+      <ul class="event-list" id="event-list">
+        <li>Interface pilote initialisee pour ecran Raspberry Pi 7 pouces.</li>
+      </ul>
+    </section>
+  </main>
 
-      <section class="panel hero-panel">
-        <div class="panel-heading">
-          <h2>Etat general du bateau</h2>
-        </div>
-        <div class="hero-layout compact-hero-layout">
-          <div class="readout-card large compact-summary">
-            <span class="readout-label">Synthese</span>
-            <strong>Supervision prete</strong>
-            <p>Cette rubrique a ete reduite pour laisser la temperature dominante des l'accueil. Elle reste disponible en bas pour le contexte global.</p>
-          </div>
-        </div>
-      </section>
-    </main>
-  </div>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

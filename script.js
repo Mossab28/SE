@@ -1,22 +1,11 @@
 const fields = {
+  battery_soc: "--",
   battery_temperature: "--",
-  battery_voltage: "--",
   battery_current: "--",
-  battery_power: "--",
-  motor_temperature: "--",
-  motor_pressure: "--",
-  motor_speed: "--",
-  motor_torque: "--",
-  controller_mode: "--",
-  controller_power_request: "--",
-  controller_efficiency: "--",
+  controller_temperature: "--",
+  controller_current: "--",
   controller_safety: "--",
-  boat_distance_km: "--",
-  boat_activity_duration: "--",
-  gps_lat: "--",
-  gps_lng: "--",
   gps_speed_kmh: "--",
-  gps_satellites: "--",
 };
 
 const statusConfig = {
@@ -26,85 +15,50 @@ const statusConfig = {
   comms: { text: "En attente", tone: "neutral" },
 };
 
-const barConfig = {
-  battery_temperature: { min: 0, max: 50, warnAbove: 38, alertAbove: 45 },
-  battery_voltage: { min: 40, max: 55, warnBelow: 46, alertBelow: 44 },
-  battery_current: { min: 0, max: 180, warnAbove: 140, alertAbove: 160 },
-  battery_power: { min: 0, max: 10, warnAbove: 7, alertAbove: 8.5 },
-  motor_temperature: { min: 0, max: 100, warnAbove: 75, alertAbove: 85 },
-  motor_pressure: { min: 0, max: 4, warnBelow: 2, alertBelow: 1.5 },
-  motor_speed: { min: 0, max: 3500, warnAbove: 2800, alertAbove: 3200 },
-  motor_torque: { min: 0, max: 250, warnAbove: 180, alertAbove: 220 },
-  controller_power_request: { min: 0, max: 100, warnAbove: 75, alertAbove: 90 },
-  controller_efficiency: { min: 70, max: 100, warnBelow: 88, alertBelow: 82 },
+const toneRules = {
+  gps_speed_kmh: { warnBelow: 1, alertBelow: 0.1 },
+  battery_soc: { warnBelow: 35, alertBelow: 20 },
+  battery_temperature: { warnAbove: 40, alertAbove: 46 },
+  battery_current: { warnAbove: 120, alertAbove: 160 },
+  controller_temperature: { warnAbove: 70, alertAbove: 82 },
+  controller_current: { warnAbove: 20, alertAbove: 28 },
 };
 
-const metricLabels = {
-  battery_temperature: { title: "Temperature batteries", unit: "degC" },
-  battery_voltage: { title: "Voltage batterie", unit: "V" },
-  battery_current: { title: "Courant batterie", unit: "A" },
-  battery_power: { title: "Puissance batterie", unit: "kW" },
-  motor_temperature: { title: "Temperature moteur", unit: "degC" },
-  motor_pressure: { title: "Pression moteur", unit: "bar" },
-  motor_speed: { title: "Vitesse moteur", unit: "rpm" },
-  motor_torque: { title: "Couple moteur", unit: "Nm" },
-  controller_power_request: { title: "Consigne puissance", unit: "%" },
-  controller_efficiency: { title: "Rendement controleur", unit: "%" },
-};
-
-let socket;
-let reconnectTimer;
-let pollTimer;
-let ageTimer;
+let socket = null;
+let reconnectTimer = null;
+let pollTimer = null;
+let ageTimer = null;
 let lastTelemetryAt = null;
-const gaugeState = {};
-let map;
-let boatMarker;
-let boatTrail;
+
 const backendHost = "212.227.88.180";
 const backendHttpUrl = `http://${backendHost}/backend`;
 const backendWsUrl = `ws://${backendHost}/ws`;
 
-function createGaugeMarkup() {
-  return `
-    <svg viewBox="0 0 210 118" aria-hidden="true">
-      <path d="M 35 98 A 70 70 0 0 1 57 47" fill="none" stroke="#c64026" stroke-width="28"></path>
-      <path d="M 57 47 A 70 70 0 0 1 86 31" fill="none" stroke="#d18a00" stroke-width="28"></path>
-      <path d="M 86 31 A 70 70 0 0 1 124 31" fill="none" stroke="#d7bf1f" stroke-width="28"></path>
-      <path d="M 124 31 A 70 70 0 0 1 175 98" fill="none" stroke="#17724f" stroke-width="28"></path>
-      <circle cx="105" cy="98" r="12" fill="#1d252b"></circle>
-      <line class="gauge-needle" x1="105" y1="98" x2="105" y2="34" stroke="#1d252b" stroke-width="6" stroke-linecap="round"></line>
-    </svg>
-  `;
+function setText(id, value) {
+  const node = document.getElementById(id);
+  if (node) {
+    node.textContent = value;
+  }
 }
 
-function renderFields() {
-  document.querySelectorAll("[data-field]").forEach((node) => {
-    const key = node.dataset.field;
-    node.textContent = fields[key] ?? "--";
-  });
+function appendEvent(message) {
+  const eventList = document.getElementById("event-list");
+  if (!eventList) {
+    return;
+  }
 
-  renderBars();
-}
+  const item = document.createElement("li");
+  item.textContent = message;
+  eventList.prepend(item);
 
-function renderStatuses() {
-  const mappings = {
-    power: document.getElementById("status-power"),
-    cooling: document.getElementById("status-cooling"),
-    controller: document.getElementById("status-controller"),
-    comms: document.getElementById("status-comms"),
-  };
-
-  Object.entries(mappings).forEach(([key, element]) => {
-    const { text, tone } = statusConfig[key];
-    element.textContent = text;
-    element.className = `badge ${tone}`;
-  });
+  while (eventList.children.length > 5) {
+    eventList.removeChild(eventList.lastElementChild);
+  }
 }
 
 function resolveTone(value, config) {
   if (typeof value !== "number" || Number.isNaN(value) || !config) {
-    return "tone-ok";
+    return "tone-neutral";
   }
 
   if (config.alertAbove !== undefined && value >= config.alertAbove) {
@@ -126,136 +80,100 @@ function resolveTone(value, config) {
   return "tone-ok";
 }
 
-function normaliseWidth(value, config) {
-  if (typeof value !== "number" || Number.isNaN(value) || !config) {
-    return 100;
+function formatValue(key, value) {
+  if (value === null || value === undefined || value === "") {
+    return "--";
   }
 
-  const ratio = ((value - config.min) / (config.max - config.min)) * 100;
-  return Math.max(6, Math.min(100, ratio));
+  if (typeof value === "number") {
+    if (key === "controller_safety") {
+      return String(value);
+    }
+
+    if (Number.isInteger(value)) {
+      return String(value);
+    }
+
+    return value.toFixed(1);
+  }
+
+  return String(value);
 }
 
-function renderBars() {
-  document.querySelectorAll("[data-bar]").forEach((node) => {
-    const key = node.dataset.bar;
-    const rawValue = fields[key];
-    const numericValue = typeof rawValue === "string" ? Number.parseFloat(rawValue) : rawValue;
-    const config = barConfig[key];
+function derivePilotFields(raw = {}) {
+  const batterySoc =
+    raw.battery_soc ??
+    (typeof raw.battery_voltage === "number"
+      ? Math.max(0, Math.min(100, Math.round(((raw.battery_voltage - 44) / (54 - 44)) * 100)))
+      : null);
 
-    if (!config) {
-      node.style.width = "100%";
-      node.className = rawValue === "Warning" ? "tone-warn" : "tone-ok";
-      if (rawValue === "Fault" || rawValue === "Critical") {
-        node.className = "tone-alert";
+  const controllerTemperature = raw.controller_temperature ?? raw.cm_temperature ?? raw.motor_temperature ?? null;
+  const controllerCurrent = raw.controller_current ?? raw.cm_current ?? raw.controller_power_request ?? null;
+  const controllerSafety = raw.controller_safety ?? raw.cm_fnb ?? "--";
+
+  return {
+    gps_speed_kmh: raw.gps_speed_kmh ?? raw.gps_speed ?? 0,
+    controller_safety: controllerSafety,
+    battery_soc: batterySoc,
+    battery_temperature: raw.battery_temperature ?? null,
+    battery_current: raw.battery_current ?? null,
+    controller_temperature: controllerTemperature,
+    controller_current: controllerCurrent,
+  };
+}
+
+function updatePilotCards() {
+  document.querySelectorAll("[data-field]").forEach((node) => {
+    const key = node.dataset.field;
+    node.textContent = formatValue(key, fields[key]);
+  });
+
+  document.querySelectorAll("[data-tone-target]").forEach((node) => {
+    const key = node.dataset.toneTarget;
+    const value = typeof fields[key] === "string" ? Number.parseFloat(fields[key]) : fields[key];
+    node.classList.remove("tone-ok", "tone-warn", "tone-alert");
+
+    if (key === "controller_safety") {
+      const safety = String(fields[key] ?? "").toLowerCase();
+      if (["fault", "critical", "defaut"].includes(safety)) {
+        node.classList.add("tone-alert");
+      } else if (["warning", "warn", "trip"].includes(safety)) {
+        node.classList.add("tone-warn");
+      } else if (safety && safety !== "--") {
+        node.classList.add("tone-ok");
       }
       return;
     }
 
-    node.style.width = `${normaliseWidth(numericValue, config)}%`;
-    node.className = resolveTone(numericValue, config);
-  });
-
-  document.querySelectorAll("[data-gauge]").forEach((node) => {
-    const key = node.dataset.gauge;
-    const rawValue = fields[key];
-    const numericValue = typeof rawValue === "string" ? Number.parseFloat(rawValue) : rawValue;
-    const config = barConfig[key];
-    const percent = normaliseWidth(numericValue, config);
-    const angle = -90 + (percent / 100) * 180;
-    const previousAngle = gaugeState[key] ?? angle;
-    const smoothedAngle = previousAngle + (angle - previousAngle) * 0.45;
-    gaugeState[key] = smoothedAngle;
-    const needle = node.querySelector(".gauge-needle");
-    if (needle) {
-      needle.style.transform = `rotate(${smoothedAngle}deg)`;
+    const tone = resolveTone(value, toneRules[key]);
+    if (tone !== "tone-neutral") {
+      node.classList.add(tone);
     }
   });
-
-  renderWatchList();
 }
 
-function getAlertState(value, config) {
-  if (typeof value !== "number" || Number.isNaN(value) || !config) {
-    return null;
-  }
+function renderStatuses() {
+  const mappings = {
+    power: document.getElementById("status-power"),
+    cooling: document.getElementById("status-cooling"),
+    controller: document.getElementById("status-controller"),
+    comms: document.getElementById("status-comms"),
+  };
 
-  if (
-    (config.alertAbove !== undefined && value >= config.alertAbove) ||
-    (config.alertBelow !== undefined && value <= config.alertBelow)
-  ) {
-    return "critical";
-  }
-
-  if (
-    (config.warnAbove !== undefined && value >= config.warnAbove) ||
-    (config.warnBelow !== undefined && value <= config.warnBelow)
-  ) {
-    return "warning";
-  }
-
-  return null;
-}
-
-function renderWatchList() {
-  const watchList = document.getElementById("watch-list");
-  const alerts = [];
-
-  Object.entries(barConfig).forEach(([key, config]) => {
-    const rawValue = fields[key];
-    const numericValue = typeof rawValue === "string" ? Number.parseFloat(rawValue) : rawValue;
-    const state = getAlertState(numericValue, config);
-
-    if (state !== "critical") {
+  Object.entries(mappings).forEach(([key, element]) => {
+    if (!element) {
       return;
     }
 
-    alerts.push({
-      state,
-      value: numericValue,
-      label: metricLabels[key]?.title ?? key,
-      unit: metricLabels[key]?.unit ?? "",
-    });
-  });
-
-  alerts.sort((a, b) => {
-    if (a.state !== b.state) {
-      return a.state === "critical" ? -1 : 1;
-    }
-    return b.value - a.value;
-  });
-
-  watchList.innerHTML = "";
-
-  if (!alerts.length) {
-    watchList.innerHTML = `
-      <div class="watch-item watch-item-neutral">
-        <div>
-          <strong>Aucun point critique actif</strong>
-          <p>Seules les valeurs critiques instantanees apparaitront ici automatiquement.</p>
-        </div>
-        <span class="watch-badge">Stable</span>
-      </div>
-    `;
-    return;
-  }
-
-  alerts.forEach((alert) => {
-    const item = document.createElement("div");
-    item.className = `watch-item ${alert.state === "critical" ? "watch-item-critical" : "watch-item-warning"}`;
-    item.innerHTML = `
-      <div>
-        <strong>${alert.label}</strong>
-        <p>Valeur actuelle : ${alert.value} ${alert.unit}</p>
-      </div>
-      <span class="watch-badge">Critique</span>
-    `;
-    watchList.appendChild(item);
+    const { text, tone } = statusConfig[key];
+    element.textContent = text;
+    element.className = `badge ${tone}`;
   });
 }
 
 function stampUpdate() {
   if (!lastTelemetryAt) {
-    document.getElementById("last-update").textContent = "--:--:--";
+    setText("last-update", "--:--:--");
     return;
   }
 
@@ -265,120 +183,49 @@ function stampUpdate() {
     second: "2-digit",
   });
 
-  const elapsedSeconds = Math.max(0, Math.round((Date.now() - lastTelemetryAt.getTime()) / 1000));
-  const suffix = elapsedSeconds <= 1 ? "a l'instant" : `il y a ${elapsedSeconds}s`;
-  document.getElementById("last-update").textContent = `${formatter.format(lastTelemetryAt)} (${suffix})`;
-}
-
-function initialisePlaceholderState() {
-  document.querySelectorAll("[data-gauge]").forEach((node) => {
-    node.innerHTML = createGaugeMarkup();
-  });
-  renderFields();
-  renderStatuses();
-  stampUpdate();
-}
-
-function appendEvent(message) {
-  const eventList = document.getElementById("event-list");
-  const item = document.createElement("li");
-  item.textContent = message;
-  eventList.prepend(item);
-
-  while (eventList.children.length > 6) {
-    eventList.removeChild(eventList.lastElementChild);
-  }
+  setText("last-update", formatter.format(lastTelemetryAt));
 }
 
 function setConnectionState(connected) {
-  document.getElementById("link-state").textContent = connected ? "Connectee" : "Non connectee";
-  document.getElementById("mission-state").textContent = connected
-    ? "Flux telemetrique actif"
-    : "En attente de telemetrie";
-  document.getElementById("alert-state").textContent = connected
-    ? "Surveillance nominale"
-    : "Aucune alerte active";
+  setText("link-state", connected ? "Connectee" : "Non connectee");
+  setText("mission-state", connected ? "Flux pilote actif" : "En attente de telemetrie");
+  setText("alert-state", connected ? "Lecture temps reel disponible" : "Aucune trame recente");
 
   statusConfig.comms = connected
     ? { text: "Operationnelle", tone: "ok" }
     : { text: "En attente", tone: "neutral" };
 
   renderStatuses();
-  stampUpdate();
 }
 
-function markTelemetryUpdate() {
-  lastTelemetryAt = new Date();
-  stampUpdate();
-}
+function applyPayload(payload) {
+  const nextFields = derivePilotFields(payload.fields || {});
+  Object.assign(fields, nextFields);
 
-window.dashboardBridge = {
-  updateTelemetry(nextFields = {}) {
-    Object.assign(fields, nextFields);
-    renderFields();
-    updateMap();
-    markTelemetryUpdate();
-  },
-  updateStatuses(nextStatuses = {}) {
-    Object.entries(nextStatuses).forEach(([key, value]) => {
-      if (statusConfig[key]) {
-        statusConfig[key] = value;
-      }
-    });
-    renderStatuses();
-    stampUpdate();
-  },
-  pushEvent(message) {
-    appendEvent(message);
-    stampUpdate();
-  },
-  setConnectionState,
-};
-
-function initMap() {
-  const defaultPos = [48.3, 3.5];
-  map = L.map("map").setView(defaultPos, 13);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap",
-    maxZoom: 19,
-  }).addTo(map);
-
-  boatMarker = L.marker(defaultPos).addTo(map).bindPopup("Bateau Nereides");
-  boatTrail = L.polyline([], { color: "#006d7e", weight: 3, opacity: 0.7 }).addTo(map);
-}
-
-function updateMap() {
-  const lat = parseFloat(fields.gps_lat);
-  const lng = parseFloat(fields.gps_lng);
-  if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
-
-  const pos = [lat, lng];
-  boatMarker.setLatLng(pos);
-  boatTrail.addLatLng(pos);
-  map.setView(pos);
-}
-
-initialisePlaceholderState();
-initMap();
-
-appendEvent("Interface chargee. API/WebSocket/MQTT a connecter ulterieurement.");
-
-function handleRealtimeMessage(payload) {
-  if (payload.fields) {
-    window.dashboardBridge.updateTelemetry(payload.fields);
+  if (payload.statuses?.power) {
+    statusConfig.power = payload.statuses.power;
   }
 
-  if (payload.statuses) {
-    window.dashboardBridge.updateStatuses(payload.statuses);
+  if (payload.statuses?.cooling) {
+    statusConfig.cooling = payload.statuses.cooling;
   }
 
-  if (payload.event) {
-    window.dashboardBridge.pushEvent(payload.event);
+  if (payload.statuses?.controller) {
+    statusConfig.controller = payload.statuses.controller;
   }
 
   if (typeof payload.connected === "boolean") {
-    window.dashboardBridge.setConnectionState(payload.connected);
+    setConnectionState(payload.connected);
   }
+
+  if (payload.event) {
+    appendEvent(payload.event);
+  }
+
+  lastTelemetryAt = new Date();
+  updatePilotCards();
+  renderStatuses();
+  stampUpdate();
 }
 
 function scheduleReconnect() {
@@ -386,40 +233,32 @@ function scheduleReconnect() {
   reconnectTimer = window.setTimeout(connectRealtime, 2000);
 }
 
-function checkStaleness() {
-  if (lastTelemetryAt) {
-    const elapsed = (Date.now() - lastTelemetryAt.getTime()) / 1000;
-    if (elapsed > 5) {
-      window.dashboardBridge.setConnectionState(false);
-      window.dashboardBridge.pushEvent("Donnees stale — aucune trame depuis 5s.");
-    }
-  }
-}
-
 function connectRealtime() {
   socket = new WebSocket(backendWsUrl);
 
   socket.addEventListener("open", () => {
-    window.dashboardBridge.setConnectionState(true);
-    window.dashboardBridge.pushEvent("Canal temps reel connecte au backend local.");
+    setConnectionState(true);
+    appendEvent("Canal temps reel connecte.");
   });
 
   socket.addEventListener("message", (event) => {
     try {
-      handleRealtimeMessage(JSON.parse(event.data));
+      applyPayload(JSON.parse(event.data));
     } catch (error) {
-      window.dashboardBridge.pushEvent("Message temps reel recu dans un format invalide.");
+      appendEvent("Message recu dans un format invalide.");
     }
   });
 
   socket.addEventListener("close", () => {
-    window.dashboardBridge.setConnectionState(false);
-    window.dashboardBridge.pushEvent("Connexion backend perdue. Nouvelle tentative en cours.");
+    setConnectionState(false);
+    appendEvent("Connexion backend perdue. Nouvelle tentative.");
     scheduleReconnect();
   });
 
   socket.addEventListener("error", () => {
-    socket.close();
+    if (socket) {
+      socket.close();
+    }
   });
 }
 
@@ -431,26 +270,33 @@ async function pollLatestTelemetry() {
     }
 
     const payload = await response.json();
-    handleRealtimeMessage(payload);
+    applyPayload(payload);
   } catch (error) {
-    window.dashboardBridge.setConnectionState(false);
+    setConnectionState(false);
   }
 }
 
-function startPolling() {
-  clearInterval(pollTimer);
-  pollTimer = window.setInterval(pollLatestTelemetry, 500);
-  pollLatestTelemetry();
+function checkStaleness() {
+  if (!lastTelemetryAt) {
+    return;
+  }
+
+  const elapsedSeconds = (Date.now() - lastTelemetryAt.getTime()) / 1000;
+  if (elapsedSeconds > 5) {
+    setConnectionState(false);
+    setText("alert-state", "Donnees stale depuis plus de 5 secondes");
+  }
 }
 
-function startAgeTicker() {
-  clearInterval(ageTimer);
-  ageTimer = window.setInterval(() => {
-    stampUpdate();
-    checkStaleness();
-  }, 1000);
+function initialise() {
+  updatePilotCards();
+  renderStatuses();
+  stampUpdate();
+  appendEvent("Interface pilote chargee pour viewport Raspberry Pi 480 x 800.");
 }
 
+initialise();
 connectRealtime();
-startPolling();
-startAgeTicker();
+pollLatestTelemetry();
+pollTimer = window.setInterval(pollLatestTelemetry, 1000);
+ageTimer = window.setInterval(checkStaleness, 1000);
