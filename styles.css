@@ -420,17 +420,17 @@ h2 {
 
 .priority-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
 }
 
 .priority-card {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 160px;
-  padding: 20px 18px;
-  border-radius: 24px;
+  min-height: 220px;
+  padding: 26px 24px;
+  border-radius: 28px;
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
   background:
@@ -439,6 +439,7 @@ h2 {
 }
 
 .priority-card-featured {
+  grid-column: span 2;
   background:
     linear-gradient(145deg, rgba(0, 109, 126, 0.12), rgba(255, 252, 245, 0.96)),
     radial-gradient(circle at top left, rgba(240, 164, 0, 0.2), transparent 36%);
@@ -446,30 +447,40 @@ h2 {
 
 .priority-label {
   color: var(--muted);
-  font-size: 0.96rem;
+  font-size: 1.05rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
 }
 
 .priority-value {
   font-family: "Space Grotesk", sans-serif;
-  font-size: clamp(2.1rem, 3.2vw, 3.2rem);
+  font-size: clamp(2.8rem, 3.8vw, 4.2rem);
   line-height: 0.95;
   letter-spacing: -0.05em;
 }
 
 .priority-value-text {
-  font-size: clamp(1.5rem, 2vw, 2.2rem);
+  font-size: clamp(1.9rem, 2.5vw, 2.8rem);
   letter-spacing: -0.01em;
 }
 
 .priority-unit {
   color: var(--sea);
-  font-size: 0.88rem;
+  font-size: 0.98rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+@media (min-width: 1400px) {
+  .priority-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .priority-card {
+    min-height: 240px;
+  }
 }
 
 .hero-layout {
@@ -894,6 +905,10 @@ h2 {
 @media (max-width: 1100px) {
   .priority-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .priority-card-featured {
+    grid-column: span 1;
   }
 
   .metric-grid {
