@@ -61,9 +61,10 @@ const gaugeState = {};
 let map;
 let boatMarker;
 let boatTrail;
-const backendHost = "212.227.88.180";
-const backendHttpUrl = `http://${backendHost}/backend`;
-const backendWsUrl = `ws://${backendHost}/ws`;
+const backendHost = window.location.host || "nereides.pwn-ai.fr";
+const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+const backendHttpUrl = `${window.location.protocol}//${backendHost}/backend`;
+const backendWsUrl = `${wsProto}//${backendHost}/backend/ws`;
 
 function createGaugeMarkup() {
   return `
