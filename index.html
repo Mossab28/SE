@@ -12,25 +12,21 @@
 <body data-authenticated="true">
   <main class="pilot-shell">
     <header class="pilot-header">
-      <div>
-        <p class="pilot-kicker">Nereides Pilot Interface</p>
-        <h1>Lecture telemetrie pilote</h1>
+      <div class="signal-card">
+        <span class="signal-label">Liaison</span>
+        <strong id="link-state">Non connectee</strong>
       </div>
-      <div class="header-meta">
-        <div class="signal-card">
-          <span class="signal-label">Liaison</span>
-          <strong id="link-state">Non connectee</strong>
-        </div>
-        <div class="signal-card">
-          <span class="signal-label">Derniere mise a jour</span>
-          <strong id="last-update">--:--:--</strong>
-        </div>
+      <div class="signal-card signal-card-wide">
+        <span class="signal-label">Etat</span>
+        <strong id="mission-state">En attente</strong>
+      </div>
+      <div class="signal-card">
+        <span class="signal-label">Maj</span>
+        <strong id="last-update">--:--:--</strong>
       </div>
     </header>
 
     <section class="alert-banner" id="alert-banner">
-      <span class="alert-banner-label">Etat pilote</span>
-      <strong id="mission-state">En attente de telemetrie</strong>
       <span id="alert-state">Aucune alerte active</span>
     </section>
 
@@ -95,15 +91,6 @@
         <span>Comms</span>
         <strong class="badge neutral" id="status-comms">En attente</strong>
       </div>
-    </section>
-
-    <section class="timeline-panel">
-      <div class="panel-heading">
-        <h2>Journal supervision</h2>
-      </div>
-      <ul class="event-list" id="event-list">
-        <li>Interface pilote initialisee pour ecran Raspberry Pi 7 pouces.</li>
-      </ul>
     </section>
   </main>
 

@@ -24,11 +24,31 @@ const toneRules = {
   controller_current: { warnAbove: 20, alertAbove: 28 },
 };
 
+const DEMO_PAYLOAD = {
+  connected: true,
+  statuses: {
+    power: { text: "Operationnelle", tone: "ok" },
+    cooling: { text: "Nominal", tone: "ok" },
+    controller: { text: "Nominal", tone: "ok" },
+    comms: { text: "Operationnelle", tone: "ok" },
+  },
+  fields: {
+    gps_speed_kmh: 12.8,
+    controller_safety: "Nominal",
+    battery_soc: 78,
+    battery_temperature: 34.6,
+    battery_current: 18.4,
+    controller_temperature: 41.2,
+    controller_current: 15.7,
+  },
+};
+
 let socket = null;
 let reconnectTimer = null;
 let pollTimer = null;
 let ageTimer = null;
 let lastTelemetryAt = null;
+let hasLiveTelemetry = false;
 
 const backendHost = "212.227.88.180";
 const backendHttpUrl = `http://${backendHost}/backend`;
@@ -122,6 +142,10 @@ function derivePilotFields(raw = {}) {
   };
 }
 
+function hasUsableFieldData(nextFields) {
+  return Object.values(nextFields).some((value) => value !== null && value !== undefined && value !== "--");
+}
+
 function updatePilotCards() {
   document.querySelectorAll("[data-field]").forEach((node) => {
     const key = node.dataset.field;
@@ -188,8 +212,8 @@ function stampUpdate() {
 
 function setConnectionState(connected) {
   setText("link-state", connected ? "Connectee" : "Non connectee");
-  setText("mission-state", connected ? "Flux pilote actif" : "En attente de telemetrie");
-  setText("alert-state", connected ? "Lecture temps reel disponible" : "Aucune trame recente");
+  setText("mission-state", connected ? "Pilotage actif" : "Mode demo");
+  setText("alert-state", "Nominal");
 
   statusConfig.comms = connected
     ? { text: "Operationnelle", tone: "ok" }
@@ -200,7 +224,13 @@ function setConnectionState(connected) {
 
 function applyPayload(payload) {
   const nextFields = derivePilotFields(payload.fields || {});
-  Object.assign(fields, nextFields);
+  const hasMeaningfulFields = hasUsableFieldData(nextFields);
+
+  if (hasMeaningfulFields) {
+    Object.assign(fields, nextFields);
+    hasLiveTelemetry = true;
+    lastTelemetryAt = new Date();
+  }
 
   if (payload.statuses?.power) {
     statusConfig.power = payload.statuses.power;
@@ -215,14 +245,13 @@ function applyPayload(payload) {
   }
 
   if (typeof payload.connected === "boolean") {
-    setConnectionState(payload.connected);
+    setConnectionState(hasLiveTelemetry ? payload.connected : false);
   }
 
   if (payload.event) {
     appendEvent(payload.event);
   }
 
-  lastTelemetryAt = new Date();
   updatePilotCards();
   renderStatuses();
   stampUpdate();
@@ -272,7 +301,9 @@ async function pollLatestTelemetry() {
     const payload = await response.json();
     applyPayload(payload);
   } catch (error) {
-    setConnectionState(false);
+    if (!hasLiveTelemetry) {
+      setConnectionState(false);
+    }
   }
 }
 
@@ -284,7 +315,6 @@ function checkStaleness() {
   const elapsedSeconds = (Date.now() - lastTelemetryAt.getTime()) / 1000;
   if (elapsedSeconds > 5) {
     setConnectionState(false);
-    setText("alert-state", "Donnees stale depuis plus de 5 secondes");
   }
 }
 
@@ -292,7 +322,8 @@ function initialise() {
   updatePilotCards();
   renderStatuses();
   stampUpdate();
-  appendEvent("Interface pilote chargee pour viewport Raspberry Pi 480 x 800.");
+  applyPayload(DEMO_PAYLOAD);
+  hasLiveTelemetry = false;
 }
 
 initialise();
