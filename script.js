@@ -15,14 +15,7 @@ const statusConfig = {
   comms: { text: "En attente", tone: "neutral" },
 };
 
-const toneRules = {
-  gps_speed_kmh: { warnBelow: 1, alertBelow: 0.1 },
-  battery_soc: { warnBelow: 35, alertBelow: 20 },
-  battery_temperature: { warnAbove: 40, alertAbove: 46 },
-  battery_current: { warnAbove: 120, alertAbove: 160 },
-  controller_temperature: { warnAbove: 70, alertAbove: 82 },
-  controller_current: { warnAbove: 20, alertAbove: 28 },
-};
+const RANDOM_TONES = ["tone-ok", "tone-warn", "tone-alert"];
 
 const DEMO_PAYLOAD = {
   connected: true,
@@ -49,6 +42,7 @@ let pollTimer = null;
 let ageTimer = null;
 let lastTelemetryAt = null;
 let hasLiveTelemetry = false;
+const temporaryToneMap = {};
 
 const backendHost = "212.227.88.180";
 const backendHttpUrl = `http://${backendHost}/backend`;
@@ -76,28 +70,13 @@ function appendEvent(message) {
   }
 }
 
-function resolveTone(value, config) {
-  if (typeof value !== "number" || Number.isNaN(value) || !config) {
-    return "tone-neutral";
+function getTemporaryTone(key) {
+  if (!temporaryToneMap[key]) {
+    const index = Math.floor(Math.random() * RANDOM_TONES.length);
+    temporaryToneMap[key] = RANDOM_TONES[index];
   }
 
-  if (config.alertAbove !== undefined && value >= config.alertAbove) {
-    return "tone-alert";
-  }
-
-  if (config.alertBelow !== undefined && value <= config.alertBelow) {
-    return "tone-alert";
-  }
-
-  if (config.warnAbove !== undefined && value >= config.warnAbove) {
-    return "tone-warn";
-  }
-
-  if (config.warnBelow !== undefined && value <= config.warnBelow) {
-    return "tone-warn";
-  }
-
-  return "tone-ok";
+  return temporaryToneMap[key];
 }
 
 function formatValue(key, value) {
@@ -154,25 +133,8 @@ function updatePilotCards() {
 
   document.querySelectorAll("[data-tone-target]").forEach((node) => {
     const key = node.dataset.toneTarget;
-    const value = typeof fields[key] === "string" ? Number.parseFloat(fields[key]) : fields[key];
     node.classList.remove("tone-ok", "tone-warn", "tone-alert");
-
-    if (key === "controller_safety") {
-      const safety = String(fields[key] ?? "").toLowerCase();
-      if (["fault", "critical", "defaut"].includes(safety)) {
-        node.classList.add("tone-alert");
-      } else if (["warning", "warn", "trip"].includes(safety)) {
-        node.classList.add("tone-warn");
-      } else if (safety && safety !== "--") {
-        node.classList.add("tone-ok");
-      }
-      return;
-    }
-
-    const tone = resolveTone(value, toneRules[key]);
-    if (tone !== "tone-neutral") {
-      node.classList.add(tone);
-    }
+    node.classList.add(getTemporaryTone(key));
   });
 }
 
