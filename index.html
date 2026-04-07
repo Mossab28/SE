@@ -10,7 +10,49 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
-<body>
+<body data-authenticated="false">
+  <section class="login-overlay" id="login-overlay" aria-labelledby="login-title" role="dialog" aria-modal="true">
+    <div class="login-backdrop" aria-hidden="true"></div>
+    <div class="login-card panel">
+      <div class="login-header">
+        <p class="eyebrow">Acces securise</p>
+        <h1 id="login-title">Connexion operateur</h1>
+        <p class="login-intro">Authentifiez-vous pour acceder au tableau de bord de supervision et aux donnees temps reel.</p>
+      </div>
+
+      <form class="login-form" id="login-form" autocomplete="on">
+        <label class="login-field">
+          <span>Identifiant</span>
+          <input id="login-username" type="text" name="username" placeholder="operateur" autocomplete="username" required />
+        </label>
+
+        <label class="login-field">
+          <span>Mot de passe</span>
+          <input id="login-password" type="password" name="password" placeholder="********" autocomplete="current-password" required />
+        </label>
+
+        <div class="login-options">
+          <label class="login-remember">
+            <input type="checkbox" name="remember" />
+            <span>Conserver la session</span>
+          </label>
+          <span class="login-link">Acces reserve aux comptes autorises</span>
+        </div>
+
+        <button type="submit" class="login-submit" id="login-submit">Entrer dans l'interface</button>
+        <p class="login-feedback" id="login-feedback" aria-live="polite"></p>
+      </form>
+
+      <div class="login-footer">
+        <div class="login-chip">
+          <span class="status-dot"></span>
+          <span>Supervision reservee aux comptes autorises</span>
+        </div>
+        <p>Le design reprend les panneaux et la palette du dashboard pour garder une transition visuelle coherente.</p>
+      </div>
+    </div>
+  </section>
+
   <div class="page-shell">
     <header class="topbar">
       <div>
@@ -22,14 +64,62 @@
           <span class="status-dot"></span>
           <span>Flux pret a connecter</span>
         </div>
+        <div class="session-chip" id="session-chip" hidden>
+          <span>Session</span>
+          <strong id="session-user">--</strong>
+        </div>
         <div class="timestamp-block">
           <span class="label">Derniere mise a jour</span>
           <strong id="last-update">--:--:--</strong>
         </div>
+        <button type="button" class="logout-button" id="logout-button" hidden>Se deconnecter</button>
       </div>
     </header>
 
     <main class="dashboard-grid">
+      <section class="panel priority-panel">
+        <div class="panel-heading">
+          <h2>Mesures prioritaires</h2>
+        </div>
+        <div class="priority-grid">
+          <article class="priority-card priority-card-featured">
+            <span class="priority-label">GPS vitesse</span>
+            <strong class="priority-value" data-field="gps_speed_kmh">--</strong>
+            <span class="priority-unit">km/h</span>
+          </article>
+          <article class="priority-card">
+            <span class="priority-label">CM FNB</span>
+            <strong class="priority-value priority-value-text" data-field="controller_safety">--</strong>
+            <span class="priority-unit">etat</span>
+          </article>
+          <article class="priority-card">
+            <span class="priority-label">Batterie SOC</span>
+            <strong class="priority-value" data-field="battery_voltage">--</strong>
+            <span class="priority-unit">V</span>
+          </article>
+          <article class="priority-card">
+            <span class="priority-label">Batterie TempMax</span>
+            <strong class="priority-value" data-field="battery_temperature">--</strong>
+            <span class="priority-unit">degC</span>
+          </article>
+          <article class="priority-card">
+            <span class="priority-label">Batterie Current</span>
+            <strong class="priority-value" data-field="battery_current">--</strong>
+            <span class="priority-unit">A</span>
+          </article>
+          <article class="priority-card">
+            <span class="priority-label">CM TempCM</span>
+            <strong class="priority-value" data-field="motor_temperature">--</strong>
+            <span class="priority-unit">degC</span>
+          </article>
+          <article class="priority-card">
+            <span class="priority-label">CM Current</span>
+            <strong class="priority-value" data-field="controller_power_request">--</strong>
+            <span class="priority-unit">%</span>
+          </article>
+        </div>
+      </section>
+
       <section class="panel watch-panel">
         <div class="panel-heading">
           <h2>Points critiques instantan&eacute;s</h2>
