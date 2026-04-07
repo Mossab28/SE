@@ -23,8 +23,25 @@ ssh nereides@NereidesPI2.local
 - **OS** : Debian 13 (trixie) - Raspberry Pi OS
 - **Hostname** : NereidesPI2
 - **Python** : 3.13
-- **Ecran** : HDMI, mode portrait (xrandr rotate right)
 - **Port serie** : `/dev/serial0` a 115200 baud (UART vers ESP32)
+
+## Ecran embarque
+
+| Spec | Valeur |
+|------|--------|
+| Modele | Newhaven NHD-7.0-HDMI-N-RSXP |
+| Type | TFT IPS |
+| Taille | 7 pouces (diagonale) |
+| Resolution native | 800 x 480 |
+| Orientation | **Portrait** (rotation 90 via `xrandr --output HDMI-A-1 --rotate right`) |
+| Resolution effective | **480 x 800** (largeur x hauteur apres rotation) |
+| Interface | HDMI |
+
+> **Pour le developpement de la nouvelle UI** : designer pour un viewport de
+> **480 x 800 pixels** en mode portrait. L'ecran est petit (7") donc utiliser
+> des polices lisibles (min 16px), des contrastes forts, et eviter les elements
+> trop petits. Pas de tactile — l'interface est en lecture seule (affichage
+> de telemetrie).
 - **GPIO** : LED activite (pin 7), LED connexion internet (pin 11)
 
 ## Architecture sur le Pi
