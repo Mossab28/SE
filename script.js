@@ -175,7 +175,7 @@ function stampUpdate() {
 function setConnectionState(connected) {
   setText("link-state", connected ? "Connectee" : "Non connectee");
   setText("mission-state", connected ? "Pilotage actif" : "Mode demo");
-  setText("alert-state", "Nominal");
+  setText("alert-state", "");
 
   statusConfig.comms = connected
     ? { text: "Operationnelle", tone: "ok" }
