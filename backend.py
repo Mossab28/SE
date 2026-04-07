@@ -20,17 +20,25 @@ class TelemetryFrame(BaseModel):
     timestamp: str | None = None
     source: str = "simulator_local"
     battery_temperature: float | None = None
+    battery_temp_min: float | None = None
     battery_voltage: float | None = None
     battery_current: float | None = None
     battery_power: float | None = None
+    battery_soc: float | None = None
     motor_temperature: float | None = None
     motor_pressure: float | None = None
     motor_speed: float | None = None
     motor_torque: float | None = None
+    motor_current: float | None = None
+    motor_voltage: float | None = None
     controller_mode: str | None = None
+    controller_temperature: float | None = None
     controller_power_request: float | None = None
     controller_efficiency: float | None = None
     controller_safety: str | None = None
+    controller_feedback: str | None = None
+    controller_fnb: str | None = None
+    controller_throttle: float | None = None
     boat_distance_km: float | None = None
     boat_activity_duration: str | None = None
     gps_lat: float | None = None
@@ -92,12 +100,12 @@ async def _process_frame(frame: TelemetryFrame) -> None:
     """Process a telemetry frame from any source (POST or MQTT)."""
     fields = frame.model_dump(exclude={"timestamp", "source"}, exclude_none=True)
     statuses = build_statuses(frame)
-    latest_payload.update({
-        "connected": True,
-        "fields": fields,
-        "statuses": statuses,
-        "event": build_event(frame),
-    })
+    if "fields" not in latest_payload or not isinstance(latest_payload.get("fields"), dict):
+        latest_payload["fields"] = {}
+    latest_payload["fields"].update(fields)
+    latest_payload["connected"] = True
+    latest_payload["statuses"] = statuses
+    latest_payload["event"] = build_event(frame)
     await broadcast(latest_payload)
 
 
