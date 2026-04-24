@@ -9,7 +9,7 @@ La chaîne complète : **ESP32 (GPS) → USB Serial → Mini PC → MQTT (4G) �
 
 ```
 [ESP32 + GPS Neo-6M]
-        │ USB Serial (115200 baud, JSON)
+        │ USB Serial (115200 baud, texte brut)
         ▼
 [Mini PC Windows 11]  ← TU ES ICI
         │ MQTT publish via 4G
@@ -72,7 +72,7 @@ python serial_to_mqtt.py
 ```
 
 Le script :
-- Lit les trames JSON de l'ESP32 sur le port série
+- Lit les trames texte de l'ESP32 sur le port série et les convertit en JSON
 - Ajoute `timestamp` et `source: "esp32_bateau"`
 - Publie sur MQTT topic `nereides/telemetry` vers le VPS
 - Se reconnecte automatiquement si le port série ou MQTT est perdu
@@ -83,20 +83,26 @@ Le script :
 - Le dashboard web doit afficher les données GPS en temps réel
 - Grafana : http://212.227.88.180/grafana/ (mossab / mossab123)
 
-## Format des trames JSON (ESP32 → Serial)
+## Format des trames texte (ESP32 → Serial)
 
+L'ESP32 envoie du **texte brut** (pas du JSON) via Serial :
+
+```
+------ Données GPS ------
+Latitude  : 48.267340
+Longitude : 3.723456
+Satellites: 8
+Vitesse   : 12.5 km/h
+-------------------------
+```
+
+Le bridge parse ce texte et publie en JSON sur MQTT :
 ```json
 {
   "gps_lat": 48.267340,
   "gps_lng": 3.723456,
+  "gps_satellites": 8,
   "gps_speed_kmh": 12.5,
-  "gps_satellites": 8
-}
-```
-
-Le bridge ajoute automatiquement :
-```json
-{
   "timestamp": "2026-03-25T14:30:00+00:00",
   "source": "esp32_bateau"
 }

@@ -17,7 +17,6 @@ const fields = {
   controller_efficiency: "--",
   controller_safety: "--",
   controller_fnb: "--",
-  controller_feedback: "--",
   controller_throttle: "--",
   boat_distance_km: "--",
   boat_activity_duration: "--",

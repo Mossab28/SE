@@ -18,7 +18,7 @@ class TelemetryFrame(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     timestamp: str | None = None
-    source: str = "simulator_local"
+    source: str = "simulateur_pc_local"
     battery_temperature: float | None = None
     battery_temp_min: float | None = None
     battery_voltage: float | None = None
@@ -36,7 +36,6 @@ class TelemetryFrame(BaseModel):
     controller_power_request: float | None = None
     controller_efficiency: float | None = None
     controller_safety: str | None = None
-    controller_feedback: str | None = None
     controller_fnb: str | None = None
     controller_throttle: float | None = None
     boat_distance_km: float | None = None

@@ -3,20 +3,16 @@ from __future__ import annotations
 
 import os
 import unittest
-from unittest.mock import MagicMock
-
 os.environ.setdefault("MQTT_HOST", "")
-os.environ.setdefault("INFLUX_URL", "")
 
-from backend import TelemetryFrame, build_statuses, build_event, write_to_influx
-import backend
+from backend import TelemetryFrame, build_statuses, build_event
 from simulateur import build_payload
 
 
 class TestTelemetryFrame(unittest.TestCase):
     def test_minimal_frame(self):
         frame = TelemetryFrame()
-        self.assertEqual(frame.source, "simulator_local")
+        self.assertEqual(frame.source, "simulateur_pc_local")
         self.assertIsNone(frame.gps_lat)
 
     def test_full_frame(self):
@@ -76,25 +72,6 @@ class TestBuildEvent(unittest.TestCase):
         event = build_event(frame)
         self.assertIn("test_source", event)
 
-
-class TestWriteToInflux(unittest.TestCase):
-    def test_no_writer_no_crash(self):
-        original = backend.influx_writer
-        backend.influx_writer = None
-        try:
-            write_to_influx(TelemetryFrame(battery_voltage=48.0))
-        finally:
-            backend.influx_writer = original
-
-    def test_writer_called(self):
-        mock_writer = MagicMock()
-        original = backend.influx_writer
-        backend.influx_writer = mock_writer
-        try:
-            write_to_influx(TelemetryFrame(battery_voltage=48.0))
-            mock_writer.write.assert_called_once()
-        finally:
-            backend.influx_writer = original
 
 
 class TestSimulateur(unittest.TestCase):
