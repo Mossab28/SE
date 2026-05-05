@@ -44,9 +44,17 @@ let lastTelemetryAt = null;
 let hasLiveTelemetry = false;
 const temporaryToneMap = {};
 
-const backendHost = "212.227.88.180";
-const backendHttpUrl = `http://${backendHost}/backend`;
-const backendWsUrl = `ws://${backendHost}/ws`;
+const isLocalMode =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1" ||
+  window.location.hostname.startsWith("192.168.") ||
+  window.location.protocol === "file:";
+
+const VPS_HOST = "212.227.88.180";
+const backendHttpUrl = isLocalMode ? null : `http://${VPS_HOST}/backend`;
+const backendWsUrl = isLocalMode
+  ? `ws://${window.location.hostname || "localhost"}:8765`
+  : `ws://${VPS_HOST}/ws`;
 
 function setText(id, value) {
   const node = document.getElementById(id);
@@ -174,7 +182,7 @@ function stampUpdate() {
 
 function setConnectionState(connected) {
   setText("link-state", connected ? "Connectee" : "Non connectee");
-  setText("mission-state", connected ? "Pilotage actif" : "Mode demo");
+  setText("mission-state", connected ? "Pilotage actif" : (isLocalMode ? "Bridge local" : "Mode demo"));
   setText("alert-state", "");
 
   statusConfig.comms = connected
@@ -206,6 +214,10 @@ function applyPayload(payload) {
     statusConfig.controller = payload.statuses.controller;
   }
 
+  if (payload.statuses?.comms) {
+    statusConfig.comms = payload.statuses.comms;
+  }
+
   if (typeof payload.connected === "boolean") {
     setConnectionState(hasLiveTelemetry ? payload.connected : false);
   }
@@ -229,7 +241,7 @@ function connectRealtime() {
 
   socket.addEventListener("open", () => {
     setConnectionState(true);
-    appendEvent("Canal temps reel connecte.");
+    appendEvent(`Canal temps reel connecte (${isLocalMode ? "local" : "VPS"}).`);
   });
 
   socket.addEventListener("message", (event) => {
@@ -254,6 +266,9 @@ function connectRealtime() {
 }
 
 async function pollLatestTelemetry() {
+  if (!backendHttpUrl) {
+    return;
+  }
   try {
     const response = await fetch(`${backendHttpUrl}/latest`, { cache: "no-store" });
     if (!response.ok) {
@@ -290,6 +305,8 @@ function initialise() {
 
 initialise();
 connectRealtime();
-pollLatestTelemetry();
-pollTimer = window.setInterval(pollLatestTelemetry, 1000);
+if (!isLocalMode) {
+  pollLatestTelemetry();
+  pollTimer = window.setInterval(pollLatestTelemetry, 1000);
+}
 ageTimer = window.setInterval(checkStaleness, 1000);
