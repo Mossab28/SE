@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 import serial
+import urllib.request
 import websockets
 from dotenv import load_dotenv
 
@@ -32,6 +33,7 @@ MQTT_HOST = os.getenv("MQTT_HOST", "212.227.88.180")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "nereides/telemetry")
 WS_PORT = int(os.getenv("WS_LOCAL_PORT", "8765"))
+BACKEND_HTTP_URL = os.getenv("BACKEND_HTTP_URL", "http://nereides.pwn-ai.fr/backend/telemetry")
 
 
 ws_clients: set = set()
@@ -162,7 +164,21 @@ def parse_text_block(lines: list[str]) -> dict | None:
     return None
 
 
-def publish_data(mqtt_client: mqtt.Client | None, data: dict) -> None:
+def post_to_backend(data: dict) -> None:
+    """Bypass MQTT and POST directly to backend HTTP endpoint."""
+    try:
+        req = urllib.request.Request(
+            BACKEND_HTTP_URL,
+            data=json.dumps(data).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=3).read()
+    except Exception as exc:
+        print(f"HTTP POST error: {exc}")
+
+
+def publish_data(mqtt_client: mqtt.Client | None, data: dict, also_http: bool = False) -> None:
     data["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     data.setdefault("source", "esp32_bateau")
 
@@ -172,14 +188,20 @@ def publish_data(mqtt_client: mqtt.Client | None, data: dict) -> None:
         except Exception as exc:
             print(f"MQTT publish error: {exc}")
 
+    if also_http:
+        post_to_backend(data)
+
     pilot_payload = build_pilot_payload(data)
     broadcast_to_pilot(pilot_payload)
     print(f"Publie: {data}")
 
 
-def run_serial_mode(mqtt_client: mqtt.Client) -> None:
+def run_serial_mode(mqtt_client: mqtt.Client, also_http: bool = True) -> None:
     ser = connect_serial()
-    print(f"Bridge actif: {SERIAL_PORT} -> MQTT {MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC} + WS :{WS_PORT}")
+    target = f"MQTT {MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC} + WS :{WS_PORT}"
+    if also_http:
+        target += f" + HTTP {BACKEND_HTTP_URL}"
+    print(f"Bridge actif: {SERIAL_PORT} -> {target}")
 
     block: list[str] = []
     in_block = False
@@ -198,7 +220,7 @@ def run_serial_mode(mqtt_client: mqtt.Client) -> None:
             if in_block and line.startswith("-----"):
                 data = parse_text_block(block)
                 if data:
-                    publish_data(mqtt_client, data)
+                    publish_data(mqtt_client, data, also_http=also_http)
                 in_block = False
                 block = []
                 continue
@@ -215,8 +237,11 @@ def run_serial_mode(mqtt_client: mqtt.Client) -> None:
             time.sleep(1)
 
 
-def run_fake_mode(mqtt_client: mqtt.Client) -> None:
-    print(f"Bridge en mode FAKE -> MQTT {MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC} + WS :{WS_PORT}")
+def run_fake_mode(mqtt_client: mqtt.Client, also_http: bool = False) -> None:
+    target = f"MQTT {MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC} + WS :{WS_PORT}"
+    if also_http:
+        target += f" + HTTP {BACKEND_HTTP_URL}"
+    print(f"Bridge en mode FAKE -> {target}")
     print("Generation de donnees simulees (Ctrl+C pour arreter).")
 
     distance_km = 0.0
@@ -257,7 +282,7 @@ def run_fake_mode(mqtt_client: mqtt.Client) -> None:
                 "boat_activity_duration": duration,
                 "source": "fake_simulator",
             }
-            publish_data(mqtt_client, data)
+            publish_data(mqtt_client, data, also_http=also_http)
             time.sleep(1)
         except KeyboardInterrupt:
             print("\nArret demande.")
@@ -274,6 +299,16 @@ def main() -> None:
         action="store_true",
         help="Mode test : genere des donnees simulees au lieu de lire le port serie",
     )
+    parser.add_argument(
+        "--http",
+        action="store_true",
+        help="Force le POST HTTP au backend (active par defaut en mode serie)",
+    )
+    parser.add_argument(
+        "--no-http",
+        action="store_true",
+        help="Desactive le POST HTTP au backend (mode MQTT pur)",
+    )
     args = parser.parse_args()
 
     threading.Thread(target=start_ws_server, daemon=True).start()
@@ -282,9 +317,9 @@ def main() -> None:
     mqtt_client = connect_mqtt()
 
     if args.fake:
-        run_fake_mode(mqtt_client)
+        run_fake_mode(mqtt_client, also_http=args.http)
     else:
-        run_serial_mode(mqtt_client)
+        run_serial_mode(mqtt_client, also_http=not args.no_http)
 
 
 if __name__ == "__main__":
