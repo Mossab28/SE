@@ -15,8 +15,9 @@ load_dotenv()
 SERIAL_PORT = os.getenv("SERIAL_PORT", "/dev/ttyUSB0")
 SERIAL_BAUD = int(os.getenv("SERIAL_BAUD", "115200"))
 MQTT_HOST = os.getenv("MQTT_HOST", "212.227.88.180")
-MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_PORT = int(os.getenv("MQTT_PORT", "8883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "nereides/telemetry")
+MQTT_TLS = os.getenv("MQTT_TLS", "true").lower() in ("1", "true", "yes")
 
 
 def connect_serial() -> serial.Serial:
@@ -34,15 +35,20 @@ def connect_serial() -> serial.Serial:
 def connect_mqtt() -> mqtt.Client:
     """Connect to MQTT broker with retry."""
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    if MQTT_TLS:
+        import ssl
+        client.tls_set(cert_reqs=ssl.CERT_NONE)
+        client.tls_insecure_set(True)
+    proto = "mqtts" if MQTT_TLS else "mqtt"
 
     while True:
         try:
             client.connect(MQTT_HOST, MQTT_PORT)
             client.loop_start()
-            print(f"MQTT connecte a {MQTT_HOST}:{MQTT_PORT}")
+            print(f"MQTT connecte a {proto}://{MQTT_HOST}:{MQTT_PORT}")
             return client
-        except Exception:
-            print(f"MQTT {MQTT_HOST}:{MQTT_PORT} indisponible, retry dans 2s...")
+        except Exception as exc:
+            print(f"MQTT {proto}://{MQTT_HOST}:{MQTT_PORT} indispo ({exc}), retry dans 2s...")
             time.sleep(2)
 
 

@@ -15,7 +15,8 @@ except ImportError:
 
 BACKEND_URL = "http://localhost:8000/telemetry"
 MQTT_HOST = "212.227.88.180"
-MQTT_PORT = 1883
+MQTT_PORT = 8883
+MQTT_TLS = True
 MQTT_TOPIC = "nereides/telemetry"
 
 MODES = ["Standby", "Drive", "Boost"]
@@ -90,9 +91,14 @@ def main() -> None:
     if use_mqtt:
         try:
             mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+            if MQTT_TLS:
+                import ssl
+                mqtt_client.tls_set(cert_reqs=ssl.CERT_NONE)
+                mqtt_client.tls_insecure_set(True)
             mqtt_client.connect(MQTT_HOST, MQTT_PORT)
             mqtt_client.loop_start()
-            print(f"MQTT connecte a {MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC}")
+            proto = "mqtts" if MQTT_TLS else "mqtt"
+            print(f"MQTT connecte a {proto}://{MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC}")
         except Exception as exc:
             print(f"MQTT indisponible ({exc}), bascule sur HTTP uniquement.")
             use_mqtt = False
