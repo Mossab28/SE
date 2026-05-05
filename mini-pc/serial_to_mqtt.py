@@ -292,6 +292,110 @@ def run_fake_mode(mqtt_client: mqtt.Client, also_http: bool = False) -> None:
             time.sleep(1)
 
 
+SCENARIO_PHASES = [
+    # (label, duree_sec, generateur_de_data)
+    ("NORMAL", 12, lambda: {
+        "battery_voltage": round(random.uniform(48.5, 51.5), 2),
+        "battery_temperature": round(random.uniform(28.0, 35.0), 1),
+        "battery_soc": random.randint(70, 95),
+        "battery_current": round(random.uniform(40.0, 90.0), 2),
+        "controller_temperature": round(random.uniform(35.0, 50.0), 1),
+        "controller_current": round(random.uniform(15.0, 50.0), 1),
+        "controller_safety": "Nominal",
+        "motor_temperature": round(random.uniform(45.0, 65.0), 1),
+        "motor_pressure": round(random.uniform(2.0, 3.5), 2),
+        "gps_speed_kmh": round(random.uniform(8.0, 18.0), 1),
+        "gps_satellites": random.randint(8, 14),
+    }),
+    ("WARNING - batterie chaude / moteur tendu", 12, lambda: {
+        "battery_voltage": round(random.uniform(46.0, 48.5), 2),
+        "battery_temperature": round(random.uniform(40.5, 44.5), 1),
+        "battery_soc": random.randint(25, 45),
+        "battery_current": round(random.uniform(100.0, 140.0), 2),
+        "controller_temperature": round(random.uniform(62.0, 78.0), 1),
+        "controller_current": round(random.uniform(60.0, 85.0), 1),
+        "controller_safety": "Warning",
+        "motor_temperature": round(random.uniform(70.0, 84.0), 1),
+        "motor_pressure": round(random.uniform(1.5, 2.0), 2),
+        "gps_speed_kmh": round(random.uniform(15.0, 25.0), 1),
+        "gps_satellites": random.randint(5, 8),
+    }),
+    ("ALERT - panne controleur + sur-temperature", 12, lambda: {
+        "battery_voltage": round(random.uniform(43.0, 45.5), 2),
+        "battery_temperature": round(random.uniform(46.0, 52.0), 1),
+        "battery_soc": random.randint(8, 18),
+        "battery_current": round(random.uniform(140.0, 180.0), 2),
+        "controller_temperature": round(random.uniform(82.0, 95.0), 1),
+        "controller_current": round(random.uniform(85.0, 110.0), 1),
+        "controller_safety": "fault",
+        "motor_temperature": round(random.uniform(86.0, 95.0), 1),
+        "motor_pressure": round(random.uniform(0.8, 1.4), 2),
+        "gps_speed_kmh": round(random.uniform(0.0, 5.0), 1),
+        "gps_satellites": random.randint(2, 4),
+    }),
+    ("RECOVERY - retour normal", 8, lambda: {
+        "battery_voltage": round(random.uniform(47.5, 49.5), 2),
+        "battery_temperature": round(random.uniform(35.0, 39.0), 1),
+        "battery_soc": random.randint(40, 60),
+        "battery_current": round(random.uniform(60.0, 90.0), 2),
+        "controller_temperature": round(random.uniform(50.0, 60.0), 1),
+        "controller_current": round(random.uniform(30.0, 55.0), 1),
+        "controller_safety": "Nominal",
+        "motor_temperature": round(random.uniform(55.0, 70.0), 1),
+        "motor_pressure": round(random.uniform(1.8, 2.5), 2),
+        "gps_speed_kmh": round(random.uniform(5.0, 12.0), 1),
+        "gps_satellites": random.randint(7, 10),
+    }),
+]
+
+
+def run_scenario_mode(mqtt_client: mqtt.Client, also_http: bool = True) -> None:
+    target = f"WS :{WS_PORT}"
+    if also_http:
+        target += f" + HTTP {BACKEND_HTTP_URL}"
+    if mqtt_client is not None:
+        target += f" + MQTT {MQTT_HOST}:{MQTT_PORT}"
+    print(f"Bridge en mode SCENARIO -> {target}")
+    print("Cycles : NORMAL -> WARNING -> ALERT -> RECOVERY -> NORMAL ...")
+    print("Ctrl+C pour arreter.\n")
+
+    distance_km = 0.0
+    start_time = time.time()
+    lat_base, lng_base = 48.2674, 4.0743
+    cycle = 0
+
+    while True:
+        try:
+            cycle += 1
+            for label, duration, gen in SCENARIO_PHASES:
+                print(f"\n>>> Cycle {cycle} - Phase: {label} ({duration}s)")
+                phase_start = time.time()
+                while time.time() - phase_start < duration:
+                    distance_km += random.uniform(0.005, 0.05)
+                    elapsed = int(time.time() - start_time)
+                    dur_str = f"{elapsed // 3600:02d}:{(elapsed % 3600) // 60:02d}:{elapsed % 60:02d}"
+
+                    base = gen()
+                    data = {
+                        "gps_lat": round(lat_base + random.uniform(-0.003, 0.003), 6),
+                        "gps_lng": round(lng_base + random.uniform(-0.003, 0.003), 6),
+                        "battery_power": round(base["battery_voltage"] * base["battery_current"] / 1000, 2),
+                        "motor_speed": round(random.uniform(800, 3000), 0),
+                        "motor_torque": round(random.uniform(50.0, 220.0), 1),
+                        "controller_mode": "Drive",
+                        "controller_efficiency": round(random.uniform(82.0, 96.0), 1),
+                        "boat_distance_km": round(distance_km, 2),
+                        "boat_activity_duration": dur_str,
+                        "source": f"scenario_{label.split()[0].lower()}",
+                        **base,
+                    }
+                    publish_data(mqtt_client, data, also_http=also_http)
+                    time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nArret demande.")
+            break
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Bridge serie/MQTT/WebSocket")
     parser.add_argument(
@@ -309,14 +413,24 @@ def main() -> None:
         action="store_true",
         help="Desactive le POST HTTP au backend (mode MQTT pur)",
     )
+    parser.add_argument(
+        "--scenario",
+        action="store_true",
+        help="Mode test couleurs : cycle NORMAL/WARNING/ALERT/RECOVERY (implique --fake --http)",
+    )
     args = parser.parse_args()
+    if args.scenario:
+        args.fake = True
+        args.http = True
 
     threading.Thread(target=start_ws_server, daemon=True).start()
     time.sleep(0.5)
 
     mqtt_client = connect_mqtt()
 
-    if args.fake:
+    if args.scenario:
+        run_scenario_mode(mqtt_client, also_http=args.http)
+    elif args.fake:
         run_fake_mode(mqtt_client, also_http=args.http)
     else:
         run_serial_mode(mqtt_client, also_http=not args.no_http)
