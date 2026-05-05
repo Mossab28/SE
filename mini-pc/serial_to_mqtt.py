@@ -1,26 +1,124 @@
-"""Read ESP32 text GPS data from USB serial, publish as JSON to MQTT."""
+"""Bridge ESP32 -> MQTT VPS + WebSocket local pour interface pilote.
+
+Le bridge :
+- Lit les donnees GPS du port serie (format texte de l'ESP32)
+- Publie sur le broker MQTT du VPS (pour le dashboard online)
+- Diffuse sur un WebSocket local (port 8765) pour l'interface pilote en local
+  qui fonctionne meme sans internet.
+
+Mode --fake : pas de port serie, genere des donnees simulees (pour tests).
+"""
 from __future__ import annotations
 
+import argparse
+import asyncio
 import json
 import os
+import random
+import threading
 import time
 from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 import serial
+import websockets
 from dotenv import load_dotenv
 
 load_dotenv()
 
-SERIAL_PORT = os.getenv("SERIAL_PORT", "COM3")
+SERIAL_PORT = os.getenv("SERIAL_PORT", "COM4")
 SERIAL_BAUD = int(os.getenv("SERIAL_BAUD", "115200"))
 MQTT_HOST = os.getenv("MQTT_HOST", "212.227.88.180")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "nereides/telemetry")
+WS_PORT = int(os.getenv("WS_LOCAL_PORT", "8765"))
+
+
+ws_clients: set = set()
+ws_loop: asyncio.AbstractEventLoop | None = None
+
+
+async def _ws_handler(websocket):
+    ws_clients.add(websocket)
+    try:
+        await websocket.wait_closed()
+    finally:
+        ws_clients.discard(websocket)
+
+
+async def _ws_server() -> None:
+    global ws_loop
+    ws_loop = asyncio.get_event_loop()
+    async with websockets.serve(_ws_handler, "0.0.0.0", WS_PORT):
+        print(f"WebSocket local actif sur ws://0.0.0.0:{WS_PORT}")
+        await asyncio.Future()
+
+
+def start_ws_server() -> None:
+    asyncio.run(_ws_server())
+
+
+async def _ws_broadcast(message: str) -> None:
+    if not ws_clients:
+        return
+    await asyncio.gather(
+        *(client.send(message) for client in ws_clients),
+        return_exceptions=True,
+    )
+
+
+def broadcast_to_pilot(payload: dict) -> None:
+    if ws_loop is None or not ws_clients:
+        return
+    msg = json.dumps(payload)
+    asyncio.run_coroutine_threadsafe(_ws_broadcast(msg), ws_loop)
+
+
+def build_statuses(data: dict) -> dict:
+    voltage = data.get("battery_voltage")
+    batt_temp = data.get("battery_temperature")
+    motor_pressure = data.get("motor_pressure")
+    motor_temp = data.get("motor_temperature")
+    safety = (data.get("controller_safety") or "").lower()
+    sats = data.get("gps_satellites", 0) or 0
+
+    power_ok = (voltage is None or voltage >= 45) and (batt_temp is None or batt_temp < 45)
+    cooling_ok = (motor_pressure is None or motor_pressure >= 1.5) and (motor_temp is None or motor_temp < 85)
+    controller_ok = safety not in {"fault", "trip", "critical"}
+    comms_ok = sats >= 4
+
+    return {
+        "power": {
+            "text": "Operationnelle" if power_ok else "Sur alerte",
+            "tone": "ok" if power_ok else "alert",
+        },
+        "cooling": {
+            "text": "Operationnel" if cooling_ok else "A surveiller",
+            "tone": "ok" if cooling_ok else "warn",
+        },
+        "controller": {
+            "text": "Nominal" if controller_ok else "Defaut",
+            "tone": "ok" if controller_ok else "alert",
+        },
+        "comms": {
+            "text": "Operationnelle" if comms_ok else "Sat. faibles",
+            "tone": "ok" if comms_ok else "warn",
+        },
+    }
+
+
+def build_pilot_payload(data: dict) -> dict:
+    """Format expected by pilot-ui/script.js."""
+    fields = {k: v for k, v in data.items() if k not in ("timestamp", "source")}
+    return {
+        "connected": True,
+        "fields": fields,
+        "statuses": build_statuses(data),
+        "event": f"Trame de {data.get('source', 'esp32_bateau')} a {datetime.now().strftime('%H:%M:%S')}.",
+    }
 
 
 def connect_serial() -> serial.Serial:
-    """Connect to serial port with retry."""
     while True:
         try:
             ser = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=2)
@@ -32,9 +130,7 @@ def connect_serial() -> serial.Serial:
 
 
 def connect_mqtt() -> mqtt.Client:
-    """Connect to MQTT broker with retry."""
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-
     while True:
         try:
             client.connect(MQTT_HOST, MQTT_PORT)
@@ -47,17 +143,8 @@ def connect_mqtt() -> mqtt.Client:
 
 
 def parse_text_block(lines: list[str]) -> dict | None:
-    """Parse the text output from the existing ESP32 firmware.
-
-    Expected format:
-        ------ Données GPS ------
-        Latitude  : 48.268266
-        Longitude : 4.068358
-        Satellites: 4
-        Vitesse   : 0.37 km/h
-        -------------------------
-    """
-    data = {}
+    """Parse the text output from the existing ESP32 firmware."""
+    data: dict = {}
     for line in lines:
         if line.startswith("Latitude"):
             data["gps_lat"] = float(line.split(":")[1].strip())
@@ -66,18 +153,33 @@ def parse_text_block(lines: list[str]) -> dict | None:
         elif line.startswith("Satellites"):
             data["gps_satellites"] = int(line.split(":")[1].strip())
         elif line.startswith("Vitesse"):
-            data["gps_speed_kmh"] = float(line.split(":")[1].strip().replace("km/h", "").strip())
+            data["gps_speed_kmh"] = float(
+                line.split(":")[1].strip().replace("km/h", "").strip()
+            )
 
     if "gps_lat" in data:
         return data
     return None
 
 
-def main() -> None:
-    ser = connect_serial()
-    mqtt_client = connect_mqtt()
+def publish_data(mqtt_client: mqtt.Client | None, data: dict) -> None:
+    data["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    data.setdefault("source", "esp32_bateau")
 
-    print(f"Bridge actif: {SERIAL_PORT} -> MQTT {MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC}")
+    if mqtt_client is not None:
+        try:
+            mqtt_client.publish(MQTT_TOPIC, json.dumps(data), qos=1)
+        except Exception as exc:
+            print(f"MQTT publish error: {exc}")
+
+    pilot_payload = build_pilot_payload(data)
+    broadcast_to_pilot(pilot_payload)
+    print(f"Publie: {data}")
+
+
+def run_serial_mode(mqtt_client: mqtt.Client) -> None:
+    ser = connect_serial()
+    print(f"Bridge actif: {SERIAL_PORT} -> MQTT {MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC} + WS :{WS_PORT}")
 
     block: list[str] = []
     in_block = False
@@ -96,10 +198,7 @@ def main() -> None:
             if in_block and line.startswith("-----"):
                 data = parse_text_block(block)
                 if data:
-                    data["timestamp"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-                    data["source"] = "esp32_bateau"
-                    mqtt_client.publish(MQTT_TOPIC, json.dumps(data), qos=1)
-                    print(f"Publie: {data}")
+                    publish_data(mqtt_client, data)
                 in_block = False
                 block = []
                 continue
@@ -114,6 +213,78 @@ def main() -> None:
         except Exception as exc:
             print(f"Erreur: {exc}")
             time.sleep(1)
+
+
+def run_fake_mode(mqtt_client: mqtt.Client) -> None:
+    print(f"Bridge en mode FAKE -> MQTT {MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC} + WS :{WS_PORT}")
+    print("Generation de donnees simulees (Ctrl+C pour arreter).")
+
+    distance_km = 0.0
+    start_time = time.time()
+    lat_base, lng_base = 48.2674, 4.0743
+
+    while True:
+        try:
+            distance_km += random.uniform(0.005, 0.05)
+            elapsed = int(time.time() - start_time)
+            duration = f"{elapsed // 3600:02d}:{(elapsed % 3600) // 60:02d}:{elapsed % 60:02d}"
+
+            voltage = round(random.uniform(46.0, 52.0), 2)
+            current = round(random.uniform(40.0, 160.0), 2)
+
+            data = {
+                "gps_lat": round(lat_base + random.uniform(-0.005, 0.005), 6),
+                "gps_lng": round(lng_base + random.uniform(-0.005, 0.005), 6),
+                "gps_speed_kmh": round(random.uniform(0.0, 28.0), 1),
+                "gps_satellites": random.randint(6, 14),
+                "battery_voltage": voltage,
+                "battery_current": current,
+                "battery_power": round(voltage * current / 1000, 2),
+                "battery_temperature": round(random.uniform(28.0, 44.0), 1),
+                "battery_soc": random.randint(50, 95),
+                "motor_temperature": round(random.uniform(45.0, 88.0), 1),
+                "motor_pressure": round(random.uniform(1.4, 3.8), 2),
+                "motor_speed": round(random.uniform(800, 3200), 0),
+                "motor_torque": round(random.uniform(50.0, 220.0), 1),
+                "controller_temperature": round(random.uniform(35.0, 70.0), 1),
+                "controller_current": round(random.uniform(15.0, 90.0), 1),
+                "controller_mode": random.choice(["Standby", "Drive", "Boost"]),
+                "controller_safety": random.choices(
+                    ["Nominal", "Warning", "fault"], weights=[80, 18, 2]
+                )[0],
+                "controller_efficiency": round(random.uniform(84.0, 97.0), 1),
+                "boat_distance_km": round(distance_km, 2),
+                "boat_activity_duration": duration,
+                "source": "fake_simulator",
+            }
+            publish_data(mqtt_client, data)
+            time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nArret demande.")
+            break
+        except Exception as exc:
+            print(f"Erreur fake: {exc}")
+            time.sleep(1)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Bridge serie/MQTT/WebSocket")
+    parser.add_argument(
+        "--fake",
+        action="store_true",
+        help="Mode test : genere des donnees simulees au lieu de lire le port serie",
+    )
+    args = parser.parse_args()
+
+    threading.Thread(target=start_ws_server, daemon=True).start()
+    time.sleep(0.5)
+
+    mqtt_client = connect_mqtt()
+
+    if args.fake:
+        run_fake_mode(mqtt_client)
+    else:
+        run_serial_mode(mqtt_client)
 
 
 if __name__ == "__main__":
