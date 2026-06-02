@@ -279,7 +279,11 @@ app.add_middleware(
 @app.get("/predictions")
 def get_predictions() -> dict:
     with _lock:
-        return _predictions.copy()
+        result = _predictions.copy()
+        # Always include latest weather, even when waiting for boat telemetry
+        if _weather:
+            result["weather"] = _weather.copy()
+        return result
 
 
 @app.get("/health")
