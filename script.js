@@ -68,6 +68,14 @@ const gaugeState = {};
 let map;
 let boatMarker;
 let boatTrail;
+
+// ── Chart state (must be declared before initSpeedChart is called) ────────────
+const MAX_CHART_POINTS = 120;
+const _chartLabels = [];
+const _actualSpeeds = [];
+const _recommendedSpeeds = [];
+let _speedChart = null;
+let _lastRecommended = null;
 const backendHost = window.location.host || "nereides.pwn-ai.fr";
 const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
 const backendHttpUrl = `${window.location.protocol}//${backendHost}/backend`;
@@ -468,13 +476,6 @@ startPolling();
 startAgeTicker();
 
 // ── Speed Chart ───────────────────────────────────────────────────────────────
-const MAX_CHART_POINTS = 120;
-const _chartLabels = [];
-const _actualSpeeds = [];
-const _recommendedSpeeds = [];
-let _speedChart = null;
-let _lastRecommended = null;
-
 function initSpeedChart() {
   const canvas = document.getElementById("speed-chart");
   if (!canvas || !window.Chart) return;
@@ -640,11 +641,14 @@ async function pollPredictions() {
     try {
       const resp = await fetch(url, { cache: "no-store" });
       if (resp.ok) {
-        renderPredictions(await resp.json());
+        const data = await resp.json();
+        console.log("[IA] predictions reçues:", data?.weather, "status:", data?.status);
+        renderPredictions(data);
         return;
       }
-    } catch (_) {
-      // try next
+      console.warn("[IA] predictions HTTP", resp.status, url);
+    } catch (err) {
+      console.warn("[IA] predictions fetch error:", url, err.message);
     }
   }
 }
