@@ -326,6 +326,9 @@ window.dashboardBridge = {
     renderFields();
     updateMap();
     markTelemetryUpdate();
+    // Feed actual speed into the chart on every telemetry frame
+    const v = parseFloat(nextFields.gps_speed_kmh);
+    if (!isNaN(v)) pushChartPoint(v, _lastRecommended);
   },
   updateStatuses(nextStatuses = {}) {
     Object.entries(nextStatuses).forEach(([key, value]) => {
@@ -367,6 +370,7 @@ function updateMap() {
 }
 
 initialisePlaceholderState();
+initSpeedChart();
 initMap();
 
 appendEvent("Interface chargee. API/WebSocket/MQTT a connecter ulterieurement.");
@@ -463,6 +467,85 @@ connectRealtime();
 startPolling();
 startAgeTicker();
 
+// ── Speed Chart ───────────────────────────────────────────────────────────────
+const MAX_CHART_POINTS = 120;
+const _chartLabels = [];
+const _actualSpeeds = [];
+const _recommendedSpeeds = [];
+let _speedChart = null;
+let _lastRecommended = null;
+
+function initSpeedChart() {
+  const canvas = document.getElementById("speed-chart");
+  if (!canvas || !window.Chart) return;
+  _speedChart = new Chart(canvas.getContext("2d"), {
+    type: "line",
+    data: {
+      labels: _chartLabels,
+      datasets: [
+        {
+          label: "Vitesse reelle",
+          data: _actualSpeeds,
+          borderColor: "#4a9eff",
+          backgroundColor: "rgba(74,158,255,0.08)",
+          fill: true,
+          tension: 0.35,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+        {
+          label: "Vitesse preconisee IA",
+          data: _recommendedSpeeds,
+          borderColor: "#f5a623",
+          backgroundColor: "transparent",
+          borderDash: [6, 3],
+          tension: 0.15,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          ticks: { color: "#6b7f8c", maxTicksLimit: 8, font: { size: 11 } },
+          grid: { color: "rgba(255,255,255,0.04)" },
+        },
+        y: {
+          min: 0,
+          ticks: { color: "#6b7f8c", font: { size: 11 } },
+          grid: { color: "rgba(255,255,255,0.06)" },
+          title: { display: true, text: "km/h", color: "#6b7f8c", font: { size: 11 } },
+        },
+      },
+      plugins: {
+        legend: {
+          labels: { color: "#a0b3bf", font: { size: 12 }, boxWidth: 18 },
+        },
+      },
+    },
+  });
+}
+
+function pushChartPoint(actualSpeed, recommendedSpeed) {
+  const now = new Date();
+  const label = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  _chartLabels.push(label);
+  _actualSpeeds.push(typeof actualSpeed === "number" ? actualSpeed : null);
+  _recommendedSpeeds.push(recommendedSpeed !== undefined ? recommendedSpeed : _lastRecommended);
+
+  if (_chartLabels.length > MAX_CHART_POINTS) {
+    _chartLabels.shift();
+    _actualSpeeds.shift();
+    _recommendedSpeeds.shift();
+  }
+  if (_speedChart) _speedChart.update("none");
+}
+
 // ── AI Predictions ────────────────────────────────────────────────────────────
 function fmtSeconds(s) {
   if (s == null || s < 0) return "--:--:--";
@@ -482,6 +565,11 @@ function renderPredictions(data) {
     const [text, tone] = map[data.priority] || ["--", "neutral"];
     badge.textContent = text;
     badge.className = `badge ${tone}`;
+  }
+
+  // Sync recommended speed for chart
+  if (data.recommended_speed_kmh != null) {
+    _lastRecommended = data.recommended_speed_kmh;
   }
 
   // Endurance

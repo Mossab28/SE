@@ -1221,3 +1221,13 @@ h2 {
     grid-column: span 1;
   }
 }
+
+.ai-card-chart {
+  grid-column: 1 / -1;
+}
+
+.ai-chart-wrap {
+  height: 220px;
+  position: relative;
+  margin-top: 6px;
+}

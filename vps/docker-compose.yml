@@ -90,6 +90,7 @@ services:
       MQTT_PORT: "1883"
       MQTT_TOPIC: nereides/telemetry
       BATTERY_CAPACITY_WH: "5000"
+      RACE_TARGET_HOURS: "1.0"
     depends_on:
       - mosquitto
 

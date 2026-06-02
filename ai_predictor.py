@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BATTERY_CAPACITY_WH = float(os.getenv("BATTERY_CAPACITY_WH", "5000"))
+RACE_TARGET_HOURS = float(os.getenv("RACE_TARGET_HOURS", "1.0"))
 MONACO_LAT = 43.736834
 MONACO_LNG = 7.430180
 MQTT_HOST = os.getenv("MQTT_HOST", "mosquitto")
@@ -156,6 +157,21 @@ def _compute(tel: dict, wx: dict) -> dict:
             "wind_factor": round(wind_factor, 3),
         }
     pred["endurance"] = endurance
+
+    # ── Recommended speed (optimal for RACE_TARGET_HOURS endurance) ───────────
+    # Model: P ∝ v²  →  v_opt = v_current × sqrt(P_target / P_current)
+    recommended_speed = None
+    if endurance and speed > 0.5 and power_w > 20.0:
+        energy_wh = endurance["energy_remaining_wh"]
+        target_power_w = energy_wh / RACE_TARGET_HOURS
+        if target_power_w < power_w:
+            # Reduce speed to make battery last RACE_TARGET_HOURS
+            speed_factor = (target_power_w / power_w) ** 0.5
+            recommended_speed = round(max(3.0, speed * speed_factor), 1)
+        else:
+            # Current draw is sustainable — keep current speed
+            recommended_speed = round(speed, 1)
+    pred["recommended_speed_kmh"] = recommended_speed
 
     # ── Thermal trajectory alerts ─────────────────────────────────────────────
     pred["battery_thermal_alert"] = _thermal_alert(_batt_hist, batt_t, threshold=45.0)
