@@ -555,8 +555,25 @@ function fmtSeconds(s) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
+function renderWeather(wx) {
+  if (!wx) return;
+  document.getElementById("w-temp").textContent =
+    wx.temperature_c != null ? wx.temperature_c.toFixed(1) : "--";
+  document.getElementById("w-wind").textContent =
+    wx.wind_speed_ms != null ? wx.wind_speed_ms.toFixed(1) : "--";
+  document.getElementById("w-humid").textContent =
+    wx.humidity_pct != null ? wx.humidity_pct : "--";
+  document.getElementById("w-pressure").textContent =
+    wx.pressure_hpa != null ? Math.round(wx.pressure_hpa) : "--";
+}
+
 function renderPredictions(data) {
-  if (!data || data.status === "waiting" || data.status === "unavailable") return;
+  if (!data) return;
+
+  // Weather renders regardless of boat status
+  renderWeather(data.weather);
+
+  if (data.status === "waiting" || data.status === "unavailable") return;
 
   // Priority badge
   const badge = document.getElementById("ai-priority-badge");
@@ -580,17 +597,6 @@ function renderPredictions(data) {
     end?.range_km != null ? end.range_km.toFixed(1) : "--";
   document.getElementById("ai-energy").textContent =
     end?.energy_remaining_wh != null ? end.energy_remaining_wh : "--";
-
-  // Weather
-  const wx = data.weather || {};
-  document.getElementById("w-temp").textContent =
-    wx.temperature_c != null ? wx.temperature_c.toFixed(1) : "--";
-  document.getElementById("w-wind").textContent =
-    wx.wind_speed_ms != null ? wx.wind_speed_ms.toFixed(1) : "--";
-  document.getElementById("w-humid").textContent =
-    wx.humidity_pct != null ? wx.humidity_pct : "--";
-  document.getElementById("w-pressure").textContent =
-    wx.pressure_hpa != null ? Math.round(wx.pressure_hpa) : "--";
 
   // Thermal alerts
   const thermalEl = document.getElementById("ai-thermal");
