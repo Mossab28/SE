@@ -9,6 +9,7 @@ echo.
 echo  [1] Mode REEL   (lit COM4, prod)
 echo  [2] Mode FAKE   (simule des donnees au hasard)
 echo  [3] Mode SCENARIO (cycle NORMAL/WARN/ALERT pour tester couleurs)
+echo  [4] Mode RACE   (course 4 min, modele physique pour l'autonomie)
 echo  [Q] Quitter
 echo.
 set /p choice="Choix : "
@@ -16,6 +17,7 @@ set /p choice="Choix : "
 if /i "%choice%"=="1" set ARGS=
 if /i "%choice%"=="2" set ARGS=--fake --http
 if /i "%choice%"=="3" set ARGS=--scenario
+if /i "%choice%"=="4" set ARGS=--race
 if /i "%choice%"=="Q" exit /b
 
 if not defined ARGS (

@@ -34,7 +34,7 @@ MQTT_PORT = int(os.getenv("MQTT_PORT", "8883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "nereides/telemetry")
 MQTT_TLS = os.getenv("MQTT_TLS", "true").lower() in ("1", "true", "yes")
 WS_PORT = int(os.getenv("WS_LOCAL_PORT", "8765"))
-BACKEND_HTTP_URL = os.getenv("BACKEND_HTTP_URL", "http://nereides.pwn-ai.fr/backend/telemetry")
+BACKEND_HTTP_URL = os.getenv("BACKEND_HTTP_URL", "https://nereides.pwn-ai.fr/backend/telemetry")
 
 
 ws_clients: set = set()
@@ -402,6 +402,184 @@ def run_scenario_mode(mqtt_client: mqtt.Client, also_http: bool = True) -> None:
             break
 
 
+# ── Modele physique d'une course (pour tester l'estimation d'autonomie) ────────
+# Profil de vitesse cible (temps_s, vitesse_km/h) - interpole lineairement.
+# Course de 4 min : depart, 2 lignes droites separees par des virages, sprint final, arrivee.
+RACE_SPEED_PROFILE = [
+    (0, 0), (12, 26), (55, 26), (68, 12), (82, 24),
+    (125, 24), (138, 10), (155, 28), (200, 30), (225, 5), (240, 0),
+]
+RACE_DURATION_S = 240
+
+# Parametres physiques (bateau elec type Energy Boat Challenge)
+RACE_MASS_KG = 300.0          # masse bateau + pilote
+RACE_DRAG_K = 9.3             # coef trainee hydro : F_drag = K * v^2  (N, v en m/s)
+RACE_ETA = 0.88               # rendement chaine moto-propulsion
+RACE_HOTEL_W = 120.0          # consommation electronique au repos
+RACE_ACCEL_MAX = 2.0          # m/s^2 max en acceleration
+RACE_DECEL_MAX = 3.0          # m/s^2 max en freinage
+BATTERY_CAPACITY_WH = 5000.0  # idem ai_predictor.py
+RACE_PACK_R = 0.05            # resistance interne pack (ohm) -> sag tension
+RACE_START_SOC = 88.0         # SOC initial (%)
+
+
+def _race_target_speed(t: float) -> float:
+    """Vitesse cible (m/s) interpolee depuis le profil, a l'instant t (s)."""
+    pts = RACE_SPEED_PROFILE
+    if t <= pts[0][0]:
+        kmh = pts[0][1]
+    elif t >= pts[-1][0]:
+        kmh = pts[-1][1]
+    else:
+        kmh = pts[-1][1]
+        for (t0, v0), (t1, v1) in zip(pts, pts[1:]):
+            if t0 <= t <= t1:
+                frac = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+                kmh = v0 + frac * (v1 - v0)
+                break
+    return kmh / 3.6
+
+
+def run_race_mode(mqtt_client: mqtt.Client, also_http: bool = True) -> None:
+    import math
+
+    target = f"WS :{WS_PORT}"
+    if also_http:
+        target += f" + HTTP {BACKEND_HTTP_URL}"
+    if mqtt_client is not None:
+        target += f" + MQTT {MQTT_HOST}:{MQTT_PORT}"
+    print(f"Bridge en mode RACE -> {target}")
+    print(f"Course de {RACE_DURATION_S}s, modele physique coherent (SOC, puissance, temp).")
+    print("Ctrl+C pour arreter.\n")
+
+    # Etat persistant entre les courses (le SOC continue de descendre)
+    soc = RACE_START_SOC                  # %
+    batt_temp = 29.0                      # degC
+    motor_temp = 42.0                     # degC
+    ctrl_temp = 38.0                      # degC
+    distance_m = 0.0
+    # Position GPS : depart Monaco (coherent avec ai_predictor)
+    lat, lng = 43.736834, 7.430180
+    heading = 90.0                        # cap initial (est)
+    abs_start = time.time()
+    race_num = 0
+
+    while True:
+        try:
+            race_num += 1
+            print(f"\n========== COURSE #{race_num} (SOC depart {soc:.1f}%) ==========")
+            v = 0.0                        # vitesse reelle (m/s)
+            t = 0.0                        # temps dans la course (s)
+            dt = 1.0
+
+            while t <= RACE_DURATION_S:
+                # 1) Suivi de la vitesse cible avec limite d'acceleration
+                v_target = _race_target_speed(t)
+                dv = v_target - v
+                accel = dv / dt
+                accel = max(-RACE_DECEL_MAX, min(RACE_ACCEL_MAX, accel))
+                v = max(0.0, v + accel * dt)
+
+                # 2) Forces et puissance mecanique
+                f_drag = RACE_DRAG_K * v * v          # trainee hydrodynamique
+                f_acc = RACE_MASS_KG * accel          # inertie
+                f_total = f_drag + f_acc
+                p_mech = max(0.0, f_total * v)        # W (pas de regen)
+
+                # 3) Puissance electrique (rendement + conso hotel)
+                p_elec = p_mech / RACE_ETA + RACE_HOTEL_W
+
+                # 4) Tension pack : courbe SOC + sag sous charge
+                v_oc = 44.0 + (soc / 100.0) * 6.4     # 44V vide -> 50.4V plein
+                # resoudre I a partir de P=V*I avec V=Voc - I*R  =>  R*I^2 - Voc*I + P = 0
+                disc = v_oc * v_oc - 4 * RACE_PACK_R * p_elec
+                if disc < 0:
+                    current = p_elec / v_oc
+                else:
+                    current = (v_oc - math.sqrt(disc)) / (2 * RACE_PACK_R)
+                voltage = v_oc - current * RACE_PACK_R
+
+                # 5) Integration energie -> SOC
+                energy_wh = p_elec * (dt / 3600.0)
+                soc = max(0.0, soc - 100.0 * energy_wh / BATTERY_CAPACITY_WH)
+
+                # 6) Thermique : modele 1er ordre. La temperature tend vers une cible
+                # proportionnelle a la charge, avec inertie (constante de temps tau).
+                # => montee douce sous effort, redescente au ralenti. Lisse pour la
+                #    regression lineaire du predicteur d'alertes thermiques.
+                batt_target = 28.0 + 0.0026 * p_elec        # ~41C a 5 kW
+                motor_target = 30.0 + 0.0070 * p_mech        # ~72C a 6 kW meca
+                ctrl_target = 28.0 + 0.0042 * p_elec         # ~54C a 6 kW
+                batt_temp += (batt_target - batt_temp) * dt / 45.0
+                motor_temp += (motor_target - motor_temp) * dt / 50.0
+                ctrl_temp += (ctrl_target - ctrl_temp) * dt / 40.0
+
+                # 7) Grandeurs moteur / controleur derivees
+                motor_rpm = v * 3.6 * 100.0           # ~3000 RPM a 30 km/h
+                motor_torque = min(240.0, max(0.0, f_total / 6.0))
+                ctrl_efficiency = round(88.0 + 7.0 * (1.0 - min(1.0, p_elec / 7000.0)), 1)
+                motor_pressure = round(2.0 + 1.4 * min(1.0, p_elec / 7000.0), 2)
+
+                # 8) Mode controleur selon la dynamique
+                if v < 0.5:
+                    mode = "Standby"
+                elif accel > 0.5:
+                    mode = "Boost"
+                else:
+                    mode = "Drive"
+
+                # 9) GPS : on avance selon le cap, virages pendant les phases lentes
+                if v_target < 14 / 3.6:
+                    heading += 6.0                    # virage serre quand on ralentit
+                distance_m += v * dt
+                dlat = (v * dt) * math.cos(math.radians(heading)) / 111111.0
+                dlng = (v * dt) * math.sin(math.radians(heading)) / (111111.0 * math.cos(math.radians(lat)))
+                lat += dlat
+                lng += dlng
+
+                elapsed = int(time.time() - abs_start)
+                dur_str = f"{elapsed // 3600:02d}:{(elapsed % 3600) // 60:02d}:{elapsed % 60:02d}"
+
+                data = {
+                    "gps_lat": round(lat, 6),
+                    "gps_lng": round(lng, 6),
+                    "gps_speed_kmh": round(v * 3.6, 1),
+                    "gps_satellites": random.randint(9, 14),
+                    "battery_voltage": round(voltage, 2),
+                    "battery_current": round(current, 2),
+                    "battery_power": round(p_elec / 1000.0, 3),   # kW (ai_predictor *1000)
+                    "battery_temperature": round(batt_temp, 1),
+                    "battery_soc": round(soc, 1),
+                    "motor_temperature": round(motor_temp, 1),
+                    "motor_pressure": motor_pressure,
+                    "motor_speed": round(motor_rpm, 0),
+                    "motor_torque": round(motor_torque, 1),
+                    "controller_temperature": round(ctrl_temp, 1),
+                    "controller_current": round(current * 0.98, 2),
+                    "controller_mode": mode,
+                    "controller_safety": "Nominal",
+                    "controller_efficiency": ctrl_efficiency,
+                    "boat_distance_km": round(distance_m / 1000.0, 3),
+                    "boat_activity_duration": dur_str,
+                    "source": "race_simulator",
+                }
+                publish_data(mqtt_client, data, also_http=also_http)
+                t += dt
+                time.sleep(dt)
+
+            print(f"--- Course #{race_num} terminee. Distance {distance_m/1000:.2f} km, SOC {soc:.1f}% ---")
+            if soc < 5.0:
+                print("Batterie quasi vide, reset SOC pour nouvelle session.")
+                soc = RACE_START_SOC
+
+        except KeyboardInterrupt:
+            print("\nArret demande.")
+            break
+        except Exception as exc:
+            print(f"Erreur race: {exc}")
+            time.sleep(1)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Bridge serie/MQTT/WebSocket")
     parser.add_argument(
@@ -424,9 +602,16 @@ def main() -> None:
         action="store_true",
         help="Mode test couleurs : cycle NORMAL/WARNING/ALERT/RECOVERY (implique --fake --http)",
     )
+    parser.add_argument(
+        "--race",
+        action="store_true",
+        help="Mode course 4 min : modele physique coherent pour tester l'estimation d'autonomie (implique --http)",
+    )
     args = parser.parse_args()
     if args.scenario:
         args.fake = True
+        args.http = True
+    if args.race:
         args.http = True
 
     threading.Thread(target=start_ws_server, daemon=True).start()
@@ -434,7 +619,9 @@ def main() -> None:
 
     mqtt_client = connect_mqtt()
 
-    if args.scenario:
+    if args.race:
+        run_race_mode(mqtt_client, also_http=args.http)
+    elif args.scenario:
         run_scenario_mode(mqtt_client, also_http=args.http)
     elif args.fake:
         run_fake_mode(mqtt_client, also_http=args.http)
