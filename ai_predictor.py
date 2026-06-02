@@ -243,6 +243,18 @@ def _on_message(client, userdata, msg):
     with _lock:
         _telemetry.update(raw)
         _predictions = _compute(_telemetry, _weather)
+        pred = _predictions
+    # Publish recommended speed to nereides/predictions for Telegraf→InfluxDB→Grafana
+    rec = pred.get("recommended_speed_kmh")
+    if rec is not None:
+        payload = json.dumps({
+            "timestamp": pred["timestamp"],
+            "recommended_speed_kmh": rec,
+        })
+        try:
+            client.publish("nereides/predictions", payload, qos=0)
+        except Exception:
+            pass
 
 
 def _mqtt_loop() -> None:
