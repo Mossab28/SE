@@ -629,12 +629,23 @@ function renderPredictions(data) {
   }
 }
 
+const VPS_PREDICTIONS_URL = "https://nereides.pwn-ai.fr/backend/predictions";
+
 async function pollPredictions() {
-  try {
-    const resp = await fetch(`${backendHttpUrl}/predictions`, { cache: "no-store" });
-    if (resp.ok) renderPredictions(await resp.json());
-  } catch (_) {
-    // silent — AI service may not be running yet
+  const urls = [
+    `${backendHttpUrl}/predictions`,
+    VPS_PREDICTIONS_URL,
+  ];
+  for (const url of [...new Set(urls)]) {
+    try {
+      const resp = await fetch(url, { cache: "no-store" });
+      if (resp.ok) {
+        renderPredictions(await resp.json());
+        return;
+      }
+    } catch (_) {
+      // try next
+    }
   }
 }
 
