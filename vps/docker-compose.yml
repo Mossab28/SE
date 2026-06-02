@@ -39,6 +39,26 @@ services:
     depends_on:
       - influxdb
 
+  cert-init:
+    image: alpine
+    container_name: cert-init
+    restart: "no"
+    volumes:
+      - mosquitto-certs:/certs
+    command: >
+      sh -c "
+        [ -f /certs/server.crt ] && echo 'Certs already present' && exit 0 ;
+        apk add --no-cache openssl ;
+        openssl genrsa -out /certs/ca.key 2048 ;
+        openssl req -new -x509 -days 3650 -key /certs/ca.key -out /certs/ca.crt -subj '/CN=Nereides-CA' ;
+        openssl genrsa -out /certs/server.key 2048 ;
+        openssl req -new -out /certs/server.csr -key /certs/server.key -subj '/CN=212.227.88.180' ;
+        openssl x509 -req -in /certs/server.csr -CA /certs/ca.crt -CAkey /certs/ca.key -CAcreateserial -out /certs/server.crt -days 3650 ;
+        rm /certs/server.csr ;
+        chmod 644 /certs/*.crt /certs/*.key ;
+        echo 'TLS certs generated OK'
+      "
+
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: mosquitto
@@ -48,8 +68,11 @@ services:
       - "8883:8883"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
-      - ./certs:/mosquitto/certs:ro
+      - mosquitto-certs:/mosquitto/certs:ro
       - mosquitto-data:/mosquitto/data
+    depends_on:
+      cert-init:
+        condition: service_completed_successfully
 
   telegraf:
     image: telegraf:latest
@@ -98,3 +121,4 @@ volumes:
   influxdb-data:
   grafana-data:
   mosquitto-data:
+  mosquitto-certs:
