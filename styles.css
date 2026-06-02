@@ -1088,3 +1088,136 @@ h2 {
     height: 74px;
   }
 }
+
+/* ── AI Predictions Panel ────────────────────────────────────────────────── */
+.ai-panel .panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ai-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  padding-top: 8px;
+}
+
+.ai-card {
+  background: var(--surface-raised, #1d252b);
+  border: 1px solid var(--border, #2a353d);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #6b7f8c);
+}
+
+.ai-main-value {
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, #e8f0f5);
+  line-height: 1;
+}
+
+.ai-unit {
+  font-size: 0.78rem;
+  color: var(--text-muted, #6b7f8c);
+}
+
+.ai-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-secondary, #a0b3bf);
+  border-top: 1px solid var(--border, #2a353d);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+
+.ai-sub strong {
+  color: var(--text-primary, #e8f0f5);
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-weather-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ai-weather-item {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #a0b3bf);
+}
+
+.ai-weather-item strong {
+  color: var(--text-primary, #e8f0f5);
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-weather-icon {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted, #6b7f8c);
+  width: 14px;
+}
+
+.ai-thermal-ok {
+  font-size: 0.82rem;
+  color: var(--text-muted, #6b7f8c);
+  margin: 0;
+}
+
+.ai-thermal-warn {
+  font-size: 0.82rem;
+  color: #d18a00;
+  margin: 0 0 4px;
+}
+
+.ai-recs-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-recs-list li {
+  font-size: 0.82rem;
+  color: var(--text-secondary, #a0b3bf);
+  padding-left: 12px;
+  position: relative;
+  line-height: 1.4;
+}
+
+.ai-recs-list li::before {
+  content: "›";
+  position: absolute;
+  left: 0;
+  color: var(--text-muted, #6b7f8c);
+}
+
+.ai-card-recs {
+  grid-column: span 2;
+}
+
+@media (max-width: 860px) {
+  .ai-card-recs {
+    grid-column: span 1;
+  }
+}

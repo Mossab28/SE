@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
@@ -57,6 +58,7 @@ clients: set[WebSocket] = set()
 MQTT_HOST = os.getenv("MQTT_HOST")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "nereides/telemetry")
+AI_PREDICTOR_URL = os.getenv("AI_PREDICTOR_URL", "http://localhost:8002")
 
 
 def build_statuses(frame: TelemetryFrame) -> dict[str, dict[str, str]]:
@@ -152,6 +154,15 @@ def health() -> dict[str, str]:
 @app.get("/latest")
 def latest() -> dict[str, Any]:
     return latest_payload
+
+
+@app.get("/predictions")
+def predictions() -> dict[str, Any]:
+    try:
+        with urllib.request.urlopen(f"{AI_PREDICTOR_URL}/predictions", timeout=3) as resp:
+            return json.loads(resp.read())
+    except Exception:
+        return {"status": "unavailable"}
 
 
 @app.post("/telemetry")

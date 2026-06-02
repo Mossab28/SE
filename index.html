@@ -204,6 +204,72 @@
         </div>
       </section>
 
+      <section class="panel ai-panel">
+        <div class="panel-heading">
+          <h2>Intelligence IA — Previsions temps reel</h2>
+          <span class="badge neutral" id="ai-priority-badge">En attente</span>
+        </div>
+        <div class="ai-grid">
+
+          <article class="ai-card ai-card-endurance">
+            <span class="ai-label">Autonomie estimee</span>
+            <strong class="ai-main-value" id="ai-endurance">--:--:--</strong>
+            <span class="ai-unit">restant</span>
+            <div class="ai-sub">
+              <span>Distance restante</span>
+              <strong id="ai-range">--</strong>
+              <span>km</span>
+            </div>
+            <div class="ai-sub">
+              <span>Energie restante</span>
+              <strong id="ai-energy">--</strong>
+              <span>Wh</span>
+            </div>
+          </article>
+
+          <article class="ai-card ai-card-weather">
+            <span class="ai-label">Meteo Monaco</span>
+            <div class="ai-weather-grid">
+              <div class="ai-weather-item">
+                <span class="ai-weather-icon">T</span>
+                <strong id="w-temp">--</strong>
+                <span>degC</span>
+              </div>
+              <div class="ai-weather-item">
+                <span class="ai-weather-icon">V</span>
+                <strong id="w-wind">--</strong>
+                <span>m/s</span>
+              </div>
+              <div class="ai-weather-item">
+                <span class="ai-weather-icon">H</span>
+                <strong id="w-humid">--</strong>
+                <span>%</span>
+              </div>
+              <div class="ai-weather-item">
+                <span class="ai-weather-icon">P</span>
+                <strong id="w-pressure">--</strong>
+                <span>hPa</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="ai-card ai-card-thermal">
+            <span class="ai-label">Alertes thermiques predites</span>
+            <div id="ai-thermal">
+              <p class="ai-thermal-ok">Aucune alerte thermique prevue</p>
+            </div>
+          </article>
+
+          <article class="ai-card ai-card-recs">
+            <span class="ai-label">Recommandations pilote</span>
+            <ul class="ai-recs-list" id="ai-recs">
+              <li>En attente des donnees IA...</li>
+            </ul>
+          </article>
+
+        </div>
+      </section>
+
       <section class="panel">
         <div class="panel-heading">
           <h2>Batteries</h2>

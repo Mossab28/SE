@@ -73,9 +73,25 @@ services:
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
       MQTT_TOPIC: nereides/telemetry
+      AI_PREDICTOR_URL: http://ai-predictor:8002
     depends_on:
       - mosquitto
       - influxdb
+      - ai-predictor
+
+  ai-predictor:
+    build:
+      context: ..
+      dockerfile: vps/Dockerfile.predictor
+    container_name: ai-predictor
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_TOPIC: nereides/telemetry
+      BATTERY_CAPACITY_WH: "5000"
+    depends_on:
+      - mosquitto
 
 volumes:
   influxdb-data:

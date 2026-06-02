@@ -462,3 +462,87 @@ function startAgeTicker() {
 connectRealtime();
 startPolling();
 startAgeTicker();
+
+// ── AI Predictions ────────────────────────────────────────────────────────────
+function fmtSeconds(s) {
+  if (s == null || s < 0) return "--:--:--";
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function renderPredictions(data) {
+  if (!data || data.status === "waiting" || data.status === "unavailable") return;
+
+  // Priority badge
+  const badge = document.getElementById("ai-priority-badge");
+  if (badge) {
+    const map = { ok: ["Nominal", "ok"], warn: ["Attention", "warn"], alert: ["Alerte", "alert"] };
+    const [text, tone] = map[data.priority] || ["--", "neutral"];
+    badge.textContent = text;
+    badge.className = `badge ${tone}`;
+  }
+
+  // Endurance
+  const end = data.endurance;
+  document.getElementById("ai-endurance").textContent =
+    end ? fmtSeconds(end.time_remaining_s) : "--:--:--";
+  document.getElementById("ai-range").textContent =
+    end?.range_km != null ? end.range_km.toFixed(1) : "--";
+  document.getElementById("ai-energy").textContent =
+    end?.energy_remaining_wh != null ? end.energy_remaining_wh : "--";
+
+  // Weather
+  const wx = data.weather || {};
+  document.getElementById("w-temp").textContent =
+    wx.temperature_c != null ? wx.temperature_c.toFixed(1) : "--";
+  document.getElementById("w-wind").textContent =
+    wx.wind_speed_ms != null ? wx.wind_speed_ms.toFixed(1) : "--";
+  document.getElementById("w-humid").textContent =
+    wx.humidity_pct != null ? wx.humidity_pct : "--";
+  document.getElementById("w-pressure").textContent =
+    wx.pressure_hpa != null ? Math.round(wx.pressure_hpa) : "--";
+
+  // Thermal alerts
+  const thermalEl = document.getElementById("ai-thermal");
+  if (thermalEl) {
+    const alerts = [];
+    if (data.battery_thermal_alert) {
+      const a = data.battery_thermal_alert;
+      alerts.push(
+        `<p class="ai-thermal-warn">Batterie : seuil ${a.threshold_c}degC dans ${fmtSeconds(a.seconds_left)} (${a.rate_c_per_min} degC/min)</p>`
+      );
+    }
+    if (data.motor_thermal_alert) {
+      const a = data.motor_thermal_alert;
+      alerts.push(
+        `<p class="ai-thermal-warn">Moteur : seuil ${a.threshold_c}degC dans ${fmtSeconds(a.seconds_left)} (${a.rate_c_per_min} degC/min)</p>`
+      );
+    }
+    thermalEl.innerHTML =
+      alerts.length > 0
+        ? alerts.join("")
+        : '<p class="ai-thermal-ok">Aucune alerte thermique prevue</p>';
+  }
+
+  // Recommendations
+  const recsEl = document.getElementById("ai-recs");
+  if (recsEl && Array.isArray(data.recommendations)) {
+    recsEl.innerHTML = data.recommendations
+      .map((r) => `<li>${r}</li>`)
+      .join("");
+  }
+}
+
+async function pollPredictions() {
+  try {
+    const resp = await fetch(`${backendHttpUrl}/predictions`, { cache: "no-store" });
+    if (resp.ok) renderPredictions(await resp.json());
+  } catch (_) {
+    // silent — AI service may not be running yet
+  }
+}
+
+window.setInterval(pollPredictions, 5000);
+pollPredictions();
