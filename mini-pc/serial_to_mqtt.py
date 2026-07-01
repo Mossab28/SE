@@ -77,6 +77,88 @@ def broadcast_to_pilot(payload: dict) -> None:
     asyncio.run_coroutine_threadsafe(_ws_broadcast(msg), ws_loop)
 
 
+NESTED_KEYS = ("Batterie1", "Batterie2", "CM", "GPS")
+
+
+def _num(d: dict, key: str):
+    v = d.get(key)
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def flatten_nested(raw: dict) -> dict:
+    """Aplati le format imbrique (Batterie1/2 // + CM + GPS) -> champs plats.
+
+    Copie locale du flatten_nested du backend, pour alimenter le WebSocket pilote
+    local avec des champs plats. Batteries en PARALLELE : tension = moyenne,
+    courant = somme, SOC = moyenne. Retourne raw inchange si deja plat.
+    """
+    if not any(k in raw for k in NESTED_KEYS):
+        return raw
+
+    out: dict = {"source": raw.get("source", "minipc_bateau")}
+    if raw.get("timestamp") is not None:
+        out["timestamp"] = raw["timestamp"]
+
+    b1, b2 = raw.get("Batterie1") or {}, raw.get("Batterie2") or {}
+    if b1:
+        out["battery1_soc"] = _num(b1, "SOC")
+        out["battery1_voltage"] = _num(b1, "Tension")
+        out["battery1_current"] = _num(b1, "Current")
+    if b2:
+        out["battery2_soc"] = _num(b2, "SOC")
+        out["battery2_voltage"] = _num(b2, "Tension")
+        out["battery2_current"] = _num(b2, "Current")
+
+    socs = [x for x in (_num(b1, "SOC"), _num(b2, "SOC")) if x is not None]
+    volts = [x for x in (_num(b1, "Tension"), _num(b2, "Tension")) if x is not None]
+    currents = [x for x in (_num(b1, "Current"), _num(b2, "Current")) if x is not None]
+    if socs:
+        out["battery_soc"] = round(sum(socs) / len(socs), 1)
+    if volts:
+        out["battery_voltage"] = round(sum(volts) / len(volts), 2)
+    if currents:
+        out["battery_current"] = round(sum(currents), 2)
+    if volts and currents:
+        out["battery_power"] = round((out["battery_voltage"] * out["battery_current"]) / 1000, 2)
+
+    cm = raw.get("CM") or {}
+    if cm:
+        out["motor_speed"] = _num(cm, "RPM")
+        out["motor_current"] = _num(cm, "Current")
+        out["motor_voltage"] = _num(cm, "Tension")
+        out["motor_temperature"] = _num(cm, "TempMoteur")
+        out["controller_temperature"] = _num(cm, "TempCM")
+        out["controller_throttle"] = _num(cm, "ThrottleV")
+        if cm.get("Commande") is not None:
+            out["controller_mode"] = str(cm["Commande"])
+        if cm.get("FNB") is not None:
+            out["controller_fnb"] = str(cm["FNB"])
+        if cm.get("Feedback") is not None:
+            out["controller_feedback"] = str(cm["Feedback"])
+        err = _num(cm, "ErrorCode")
+        if err is not None:
+            out["controller_error_code"] = int(err)
+            out["controller_safety"] = "Nominal" if int(err) == 0 else "Fault"
+
+    gps = raw.get("GPS") or {}
+    if gps:
+        out["gps_lat"] = _num(gps, "latitude")
+        out["gps_lng"] = _num(gps, "longitude")
+        sats = _num(gps, "Satellites")
+        if sats is not None:
+            out["gps_satellites"] = int(sats)
+        knots = _num(gps, "vitesse")
+        if knots is not None:
+            out["gps_speed_kmh"] = round(knots * 1.852, 1)
+
+    return {k: v for k, v in out.items() if v is not None}
+
+
 def build_statuses(data: dict) -> dict:
     voltage = data.get("battery_voltage")
     batt_temp = data.get("battery_temperature")
@@ -231,7 +313,14 @@ def run_serial_mode(mqtt_client: mqtt.Client, also_http: bool = True) -> None:
                     datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
                 )
                 payload.setdefault("source", "minipc_bateau")
-                mqtt_client.publish(MQTT_TOPIC, json.dumps(payload), qos=1)
+                # 1) MQTT + HTTP : trame imbriquee brute (le backend l'aplatit)
+                if mqtt_client is not None:
+                    mqtt_client.publish(MQTT_TOPIC, json.dumps(payload), qos=1)
+                if also_http:
+                    post_to_backend(payload)
+                # 2) WebSocket pilote local : aplati ici (l'interface attend du plat)
+                flat = flatten_nested(payload)
+                broadcast_to_pilot(build_pilot_payload(flat))
                 print(f"Publie (JSON): {payload}")
                 continue
 
