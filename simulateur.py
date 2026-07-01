@@ -19,54 +19,71 @@ MQTT_PORT = 8883
 MQTT_TLS = True
 MQTT_TOPIC = "nereides/telemetry"
 
-MODES = ["Standby", "Drive", "Boost"]
-SAFETY_STATES = ["Nominal", "Nominal", "Nominal", "Warning"]
-distance_km = 0.0
-start_time = time.time()
+COMMANDES = ["Forward", "Forward", "Forward", "Neutral", "Backward"]
+ERROR_CODES = [0, 0, 0, 0, 0, 1 << 3]  # majoritairement sain, defaut occasionnel
+
+# SOC des deux batteries en parallele (se dechargent en meme temps)
+soc1 = 92.0
+soc2 = 91.0
 
 GPS_LAT_BASE = 48.2674
 GPS_LNG_BASE = 3.7235
 
 
 def build_payload() -> dict:
-    global distance_km
-    battery_voltage = round(random.uniform(46.0, 52.0), 2)
-    battery_current = round(random.uniform(40.0, 160.0), 2)
-    battery_power = round((battery_voltage * battery_current) / 1000, 2)
-    motor_temperature = round(random.uniform(45.0, 88.0), 1)
-    distance_km = round(distance_km + random.uniform(0.03, 0.18), 2)
-    elapsed_seconds = int(time.time() - start_time)
-    hours = elapsed_seconds // 3600
-    minutes = (elapsed_seconds % 3600) // 60
-    seconds = elapsed_seconds % 60
-    activity_duration = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    """Genere une trame au NOUVEAU format imbrique (Batterie1/Batterie2/CM/GPS).
 
-    gps_lat = round(GPS_LAT_BASE + random.uniform(-0.005, 0.005), 6)
-    gps_lng = round(GPS_LNG_BASE + random.uniform(-0.005, 0.005), 6)
-    gps_speed = round(random.uniform(5.0, 35.0), 1)
-    gps_satellites = random.randint(6, 14)
+    Les deux batteries sont en parallele : elles partagent la meme tension de bus
+    et se dechargent simultanement, donc leur SOC descend en meme temps et leurs
+    courants se repartissent la charge totale demandee par le moteur.
+    """
+    global soc1, soc2
+
+    # Tension de bus partagee (parallele) + petite dispersion par branche
+    bus_voltage = round(random.uniform(46.0, 52.0), 2)
+    total_current = random.uniform(40.0, 160.0)
+    # Repartition ~50/50 avec un desequilibre realiste
+    share = random.uniform(0.45, 0.55)
+    current1 = round(total_current * share, 2)
+    current2 = round(total_current * (1 - share), 2)
+
+    # Decharge simultanee (proportionnelle au courant de chaque branche)
+    soc1 = max(0.0, round(soc1 - current1 * 0.0006, 1))
+    soc2 = max(0.0, round(soc2 - current2 * 0.0006, 1))
+
+    error_code = random.choice(ERROR_CODES)
 
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "source": "simulateur_pc_local",
-        "battery_temperature": round(random.uniform(28.0, 44.0), 1),
-        "battery_voltage": battery_voltage,
-        "battery_current": battery_current,
-        "battery_power": battery_power,
-        "motor_temperature": motor_temperature,
-        "motor_pressure": round(random.uniform(1.4, 3.8), 2),
-        "motor_speed": round(random.uniform(800, 3200), 0),
-        "motor_torque": round(random.uniform(50.0, 220.0), 1),
-        "controller_mode": random.choice(MODES),
-        "controller_power_request": round(random.uniform(10.0, 100.0), 1),
-        "controller_efficiency": round(random.uniform(84.0, 97.0), 1),
-        "controller_safety": random.choice(SAFETY_STATES),
-        "boat_distance_km": distance_km,
-        "boat_activity_duration": activity_duration,
-        "gps_lat": gps_lat,
-        "gps_lng": gps_lng,
-        "gps_speed_kmh": gps_speed,
-        "gps_satellites": gps_satellites,
+        "Batterie1": {
+            "SOC": soc1,
+            "Tension": round(bus_voltage + random.uniform(-0.2, 0.2), 2),
+            "Current": current1,
+        },
+        "Batterie2": {
+            "SOC": soc2,
+            "Tension": round(bus_voltage + random.uniform(-0.2, 0.2), 2),
+            "Current": current2,
+        },
+        "CM": {
+            "RPM": round(random.uniform(800, 3200), 0),
+            "Current": round(total_current, 2),
+            "Tension": bus_voltage,
+            "ErrorCode": error_code,
+            "TempMoteur": round(random.uniform(45.0, 88.0), 1),
+            "TempCM": round(random.uniform(30.0, 70.0), 1),
+            "ThrottleV": round(random.uniform(0.8, 4.2), 2),
+            "Commande": random.choice(COMMANDES),
+            "FNB": random.choice(["F", "F", "F", "N", "B"]),
+            "Feedback": random.choice(["Forward", "Forward", "Stationary", "Backward"]),
+        },
+        "GPS": {
+            "vitesse": round(random.uniform(3.0, 19.0), 1),  # noeuds
+            "latitude": round(GPS_LAT_BASE + random.uniform(-0.005, 0.005), 6),
+            "longitude": round(GPS_LNG_BASE + random.uniform(-0.005, 0.005), 6),
+            "Satellites": random.randint(6, 14),
+        },
     }
 
 

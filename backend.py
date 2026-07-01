@@ -26,6 +26,13 @@ class TelemetryFrame(BaseModel):
     battery_current: float | None = None
     battery_power: float | None = None
     battery_soc: float | None = None
+    # Pack en parallele : chaque batterie suivie individuellement
+    battery1_soc: float | None = None
+    battery1_voltage: float | None = None
+    battery1_current: float | None = None
+    battery2_soc: float | None = None
+    battery2_voltage: float | None = None
+    battery2_current: float | None = None
     motor_temperature: float | None = None
     motor_pressure: float | None = None
     motor_speed: float | None = None
@@ -38,6 +45,8 @@ class TelemetryFrame(BaseModel):
     controller_efficiency: float | None = None
     controller_safety: str | None = None
     controller_fnb: str | None = None
+    controller_feedback: str | None = None
+    controller_error_code: int | None = None
     controller_throttle: float | None = None
     boat_distance_km: float | None = None
     boat_activity_duration: str | None = None
@@ -61,9 +70,92 @@ MQTT_TOPIC = os.getenv("MQTT_TOPIC", "nereides/telemetry")
 AI_PREDICTOR_URL = os.getenv("AI_PREDICTOR_URL", "http://localhost:8002")
 
 
+NESTED_KEYS = ("Batterie1", "Batterie2", "CM", "GPS")
+
+
+def _num(source: dict[str, Any], key: str) -> float | None:
+    """Extract a numeric value from a nested object, tolerant to missing/invalid."""
+    value = source.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def flatten_nested(raw: dict[str, Any]) -> dict[str, Any]:
+    """Convert the embedded nested format (Batterie1/Batterie2/CM/GPS) to flat fields.
+
+    The batteries are wired in PARALLEL: they share the pack voltage and discharge
+    simultaneously, so the aggregate voltage is the mean and the aggregate current is
+    the sum of both branches. Each branch is also kept individually. Returns `raw`
+    unchanged when it is already in the flat format.
+    """
+    if not any(k in raw for k in NESTED_KEYS):
+        return raw
+
+    out: dict[str, Any] = {"source": raw.get("source", "raspberry_bateau")}
+    if raw.get("timestamp") is not None:
+        out["timestamp"] = raw["timestamp"]
+
+    b1, b2 = raw.get("Batterie1") or {}, raw.get("Batterie2") or {}
+    if b1:
+        out["battery1_soc"] = _num(b1, "SOC")
+        out["battery1_voltage"] = _num(b1, "Tension")
+        out["battery1_current"] = _num(b1, "Current")
+    if b2:
+        out["battery2_soc"] = _num(b2, "SOC")
+        out["battery2_voltage"] = _num(b2, "Tension")
+        out["battery2_current"] = _num(b2, "Current")
+
+    socs = [x for x in (_num(b1, "SOC"), _num(b2, "SOC")) if x is not None]
+    volts = [x for x in (_num(b1, "Tension"), _num(b2, "Tension")) if x is not None]
+    currents = [x for x in (_num(b1, "Current"), _num(b2, "Current")) if x is not None]
+    if socs:
+        out["battery_soc"] = round(sum(socs) / len(socs), 1)
+    if volts:
+        out["battery_voltage"] = round(sum(volts) / len(volts), 2)  # parallele : tension partagee
+    if currents:
+        out["battery_current"] = round(sum(currents), 2)  # parallele : les courants s'additionnent
+    if volts and currents:
+        out["battery_power"] = round((out["battery_voltage"] * out["battery_current"]) / 1000, 2)
+
+    cm = raw.get("CM") or {}
+    if cm:
+        out["motor_speed"] = _num(cm, "RPM")
+        out["motor_current"] = _num(cm, "Current")
+        out["motor_voltage"] = _num(cm, "Tension")
+        out["motor_temperature"] = _num(cm, "TempMoteur")
+        out["controller_temperature"] = _num(cm, "TempCM")
+        out["controller_throttle"] = _num(cm, "ThrottleV")
+        if cm.get("Commande") is not None:
+            out["controller_mode"] = str(cm["Commande"])
+        if cm.get("FNB") is not None:
+            out["controller_fnb"] = str(cm["FNB"])
+        if cm.get("Feedback") is not None:
+            out["controller_feedback"] = str(cm["Feedback"])
+        err = _num(cm, "ErrorCode")
+        if err is not None:
+            out["controller_error_code"] = int(err)
+            out["controller_safety"] = "Nominal" if int(err) == 0 else "Fault"
+
+    gps = raw.get("GPS") or {}
+    if gps:
+        out["gps_lat"] = _num(gps, "latitude")
+        out["gps_lng"] = _num(gps, "longitude")
+        sats = _num(gps, "Satellites")
+        if sats is not None:
+            out["gps_satellites"] = int(sats)
+        knots = _num(gps, "vitesse")
+        if knots is not None:
+            out["gps_speed_kmh"] = round(knots * 1.852, 1)  # noeuds -> km/h
+
+    return {k: v for k, v in out.items() if v is not None}
+
+
 def build_statuses(frame: TelemetryFrame) -> dict[str, dict[str, str]]:
     power_ok = (frame.battery_voltage or 0) >= 45 and (frame.battery_temperature or 0) < 45
-    cooling_ok = (frame.motor_pressure or 0) >= 1.5 and (frame.motor_temperature or 0) < 85
+    cooling_ok = (frame.motor_temperature or 0) < 85 and (
+        frame.motor_pressure is None or frame.motor_pressure >= 1.5
+    )
     controller_ok = (frame.controller_safety or "").lower() not in {"fault", "trip", "critical"}
 
     return {
@@ -114,7 +206,7 @@ def _on_mqtt_message(client, userdata, msg):
     """Called in MQTT thread — schedule coroutine on the main event loop."""
     try:
         raw = json.loads(msg.payload)
-        frame = TelemetryFrame(**raw)
+        frame = TelemetryFrame(**flatten_nested(raw))
         if _loop is not None:
             asyncio.run_coroutine_threadsafe(_process_frame(frame), _loop)
     except Exception as exc:
@@ -166,7 +258,8 @@ def predictions() -> dict[str, Any]:
 
 
 @app.post("/telemetry")
-async def ingest_telemetry(frame: TelemetryFrame) -> dict[str, str]:
+async def ingest_telemetry(raw: dict[str, Any]) -> dict[str, str]:
+    frame = TelemetryFrame(**flatten_nested(raw))
     await _process_frame(frame)
     return {"status": "accepted"}
 

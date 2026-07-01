@@ -279,28 +279,31 @@
 
       <section class="panel">
         <div class="panel-heading">
-          <h2>Batteries</h2>
+          <h2>Batteries &mdash; pack parall&egrave;le</h2>
+          <span class="panel-note">Deux batteries en parall&egrave;le : tension partag&eacute;e, courants additionn&eacute;s, d&eacute;charge simultan&eacute;e.</span>
         </div>
+
+        <h3 class="subsection-title">Pack agr&eacute;g&eacute;</h3>
         <div class="metric-grid">
-          <article class="metric-card gauge-card" data-metric="battery_temperature">
-            <span class="metric-name">Temperature batteries</span>
-            <strong class="metric-value" data-field="battery_temperature">--</strong>
-            <span class="metric-unit">degC</span>
-            <span class="metric-capacity">Capacite max 50 degC</span>
-            <div class="metric-gauge-arc" data-gauge="battery_temperature"></div>
+          <article class="metric-card gauge-card" data-metric="battery_soc">
+            <span class="metric-name">SOC pack</span>
+            <strong class="metric-value" data-field="battery_soc">--</strong>
+            <span class="metric-unit">%</span>
+            <span class="metric-capacity">Moyenne des deux branches</span>
+            <div class="metric-gauge-arc" data-gauge="battery_soc"></div>
           </article>
           <article class="metric-card gauge-card" data-metric="battery_voltage">
-            <span class="metric-name">Voltage</span>
+            <span class="metric-name">Tension bus</span>
             <strong class="metric-value" data-field="battery_voltage">--</strong>
             <span class="metric-unit">V</span>
-            <span class="metric-capacity">Plage utile 40 a 55 V</span>
+            <span class="metric-capacity">Partag&eacute;e (parall&egrave;le)</span>
             <div class="metric-gauge-arc" data-gauge="battery_voltage"></div>
           </article>
           <article class="metric-card" data-metric="battery_current">
-            <span class="metric-name">Courant</span>
+            <span class="metric-name">Courant total</span>
             <strong class="metric-value" data-field="battery_current">--</strong>
             <span class="metric-unit">A</span>
-            <span class="metric-capacity">Capacite max 180 A</span>
+            <span class="metric-capacity">Somme B1 + B2</span>
             <div class="metric-bar"><span data-bar="battery_current"></span></div>
           </article>
           <article class="metric-card" data-metric="battery_power">
@@ -310,6 +313,63 @@
             <span class="metric-capacity">Capacite max 10 kW</span>
             <div class="metric-bar"><span data-bar="battery_power"></span></div>
           </article>
+          <article class="metric-card gauge-card" data-metric="battery_temperature">
+            <span class="metric-name">Temperature max</span>
+            <strong class="metric-value" data-field="battery_temperature">--</strong>
+            <span class="metric-unit">degC</span>
+            <span class="metric-capacity">Capacite max 50 degC</span>
+            <div class="metric-gauge-arc" data-gauge="battery_temperature"></div>
+          </article>
+        </div>
+
+        <h3 class="subsection-title">Branches en parall&egrave;le</h3>
+        <div class="parallel-grid">
+          <div class="battery-branch">
+            <span class="branch-title">Batterie 1 <span class="branch-badge">&#8741; parall&egrave;le</span></span>
+            <div class="metric-grid">
+              <article class="metric-card gauge-card" data-metric="battery1_soc">
+                <span class="metric-name">SOC</span>
+                <strong class="metric-value" data-field="battery1_soc">--</strong>
+                <span class="metric-unit">%</span>
+                <div class="metric-gauge-arc" data-gauge="battery1_soc"></div>
+              </article>
+              <article class="metric-card" data-metric="battery1_voltage">
+                <span class="metric-name">Tension</span>
+                <strong class="metric-value" data-field="battery1_voltage">--</strong>
+                <span class="metric-unit">V</span>
+                <div class="metric-bar"><span data-bar="battery1_voltage"></span></div>
+              </article>
+              <article class="metric-card" data-metric="battery1_current">
+                <span class="metric-name">Courant</span>
+                <strong class="metric-value" data-field="battery1_current">--</strong>
+                <span class="metric-unit">A</span>
+                <div class="metric-bar"><span data-bar="battery1_current"></span></div>
+              </article>
+            </div>
+          </div>
+          <div class="battery-branch">
+            <span class="branch-title">Batterie 2 <span class="branch-badge">&#8741; parall&egrave;le</span></span>
+            <div class="metric-grid">
+              <article class="metric-card gauge-card" data-metric="battery2_soc">
+                <span class="metric-name">SOC</span>
+                <strong class="metric-value" data-field="battery2_soc">--</strong>
+                <span class="metric-unit">%</span>
+                <div class="metric-gauge-arc" data-gauge="battery2_soc"></div>
+              </article>
+              <article class="metric-card" data-metric="battery2_voltage">
+                <span class="metric-name">Tension</span>
+                <strong class="metric-value" data-field="battery2_voltage">--</strong>
+                <span class="metric-unit">V</span>
+                <div class="metric-bar"><span data-bar="battery2_voltage"></span></div>
+              </article>
+              <article class="metric-card" data-metric="battery2_current">
+                <span class="metric-name">Courant</span>
+                <strong class="metric-value" data-field="battery2_current">--</strong>
+                <span class="metric-unit">A</span>
+                <div class="metric-bar"><span data-bar="battery2_current"></span></div>
+              </article>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -355,31 +415,38 @@
         </div>
         <div class="metric-grid">
           <article class="metric-card">
-            <span class="metric-name">Mode</span>
+            <span class="metric-name">Commande</span>
             <strong class="metric-value text" data-field="controller_mode">--</strong>
             <span class="metric-unit">etat</span>
-            <span class="metric-capacity">Modes : Standby, Drive, Boost</span>
+            <span class="metric-capacity">Neutral / Forward / Backward / Reserved</span>
             <div class="metric-bar text-bar"><span data-bar="controller_mode"></span></div>
           </article>
-          <article class="metric-card" data-metric="controller_power_request">
-            <span class="metric-name">Consigne puissance</span>
-            <strong class="metric-value" data-field="controller_power_request">--</strong>
-            <span class="metric-unit">%</span>
-            <span class="metric-capacity">Capacite max 100 %</span>
-            <div class="metric-bar"><span data-bar="controller_power_request"></span></div>
+          <article class="metric-card">
+            <span class="metric-name">Feedback</span>
+            <strong class="metric-value text" data-field="controller_feedback">--</strong>
+            <span class="metric-unit">retour</span>
+            <span class="metric-capacity">Stationary / Forward / Backward</span>
+            <div class="metric-bar text-bar"><span data-bar="controller_feedback"></span></div>
           </article>
-          <article class="metric-card" data-metric="controller_efficiency">
-            <span class="metric-name">Rendement estime</span>
-            <strong class="metric-value" data-field="controller_efficiency">--</strong>
-            <span class="metric-unit">%</span>
-            <span class="metric-capacity">Cible 70 a 100 %</span>
-            <div class="metric-bar"><span data-bar="controller_efficiency"></span></div>
+          <article class="metric-card" data-metric="controller_temperature">
+            <span class="metric-name">Temperature CM</span>
+            <strong class="metric-value" data-field="controller_temperature">--</strong>
+            <span class="metric-unit">degC</span>
+            <span class="metric-capacity">Controleur moteur</span>
+            <div class="metric-bar"><span data-bar="controller_temperature"></span></div>
+          </article>
+          <article class="metric-card" data-metric="controller_throttle">
+            <span class="metric-name">Throttle</span>
+            <strong class="metric-value" data-field="controller_throttle">--</strong>
+            <span class="metric-unit">V</span>
+            <span class="metric-capacity">Tension accelerateur</span>
+            <div class="metric-bar"><span data-bar="controller_throttle"></span></div>
           </article>
           <article class="metric-card">
             <span class="metric-name">Etat securite</span>
             <strong class="metric-value text" data-field="controller_safety">--</strong>
             <span class="metric-unit">status</span>
-            <span class="metric-capacity">Etats : Nominal, Warning, Fault</span>
+            <span class="metric-capacity">Code erreur : <span data-field="controller_error_code">--</span></span>
             <div class="metric-bar text-bar"><span data-bar="controller_safety"></span></div>
           </article>
         </div>

@@ -1231,3 +1231,73 @@ h2 {
   position: relative;
   margin-top: 6px;
 }
+
+/* ---- Batteries en parallele ---- */
+.panel-note {
+  display: block;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin-top: 6px;
+}
+
+.subsection-title {
+  margin: 26px 0 14px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.parallel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  position: relative;
+}
+
+.battery-branch {
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 24px;
+  padding: 18px;
+}
+
+.branch-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin-bottom: 14px;
+}
+
+.branch-badge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent, #17724f);
+  background: rgba(23, 114, 79, 0.14);
+  border-radius: 999px;
+  padding: 3px 12px;
+  white-space: nowrap;
+}
+
+.battery-branch .metric-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.battery-branch .metric-card {
+  min-height: 150px;
+  padding: 16px;
+}
+
+@media (max-width: 900px) {
+  .parallel-grid {
+    grid-template-columns: 1fr;
+  }
+  .battery-branch .metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

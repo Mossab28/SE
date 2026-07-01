@@ -55,10 +55,7 @@ SE/
 ### 1. ESP32
 
 Flasher `esp32/gps_serial.ino` avec Arduino IDE. Brancher le GPS Neo-6M sur les pins RX=16, TX=17.
-
-### 2. Mini PC (sur le bateau)
-
-```bash
+     
 git clone https://github.com/Mossab28/SE.git
 cd SE/mini-pc
 pip install -r requirements.txt
@@ -98,18 +95,29 @@ python simulateur.py
 
 Topic : `nereides/telemetry`
 
+Le firmware embarque envoie desormais un **format imbrique** (batteries en parallele + controleur moteur + GPS). Le backend l'aplatit automatiquement vers les champs du dashboard (`flatten_nested` dans `backend.py`).
+
 ```json
 {
-  "timestamp": "2026-03-25T14:30:00Z",
-  "source": "esp32_bateau",
-  "gps_lat": 48.267340,
-  "gps_lng": 4.074356,
-  "gps_speed_kmh": 12.5,
-  "gps_satellites": 8
+  "Batterie1": { "SOC": 92.0, "Tension": 48.8, "Current": 27.6 },
+  "Batterie2": { "SOC": 91.0, "Tension": 48.9, "Current": 31.1 },
+  "CM": {
+    "RPM": 1792, "Current": 58.7, "Tension": 48.9, "ErrorCode": 0,
+    "TempMoteur": 50.3, "TempCM": 47.3, "ThrottleV": 0.9,
+    "Commande": "Forward", "FNB": "F", "Feedback": "Forward"
+  },
+  "GPS": { "vitesse": 5.5, "latitude": 48.267340, "longitude": 4.074356, "Satellites": 8 }
 }
 ```
 
-Extensible avec : `battery_voltage`, `motor_temperature`, `controller_mode`, etc.
+Agregation cote backend (batteries **en parallele**) :
+- `battery_voltage` = moyenne des tensions (bus partage)
+- `battery_current` = **somme** des courants B1 + B2
+- `battery_soc` = moyenne des SOC ; `battery_power` = V x I / 1000
+- `GPS.vitesse` (noeuds) x 1.852 -> `gps_speed_kmh`
+- `CM.ErrorCode` = 0 -> securite `Nominal`, sinon `Fault`
+
+> L'ancien format **plat** (`gps_lat`, `battery_voltage`, ...) reste accepte : `flatten_nested` le laisse passer tel quel.
 
 ## Credentials
 

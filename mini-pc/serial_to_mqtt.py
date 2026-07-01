@@ -218,6 +218,23 @@ def run_serial_mode(mqtt_client: mqtt.Client, also_http: bool = True) -> None:
             if not line:
                 continue
 
+            # Nouveau format : trame JSON imbriquee (Batterie1/Batterie2/CM/GPS)
+            # publiee telle quelle ; le backend s'occupe de l'aplatir.
+            if line.startswith("{") and line.endswith("}"):
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    print(f"JSON invalide ignore: {line[:80]}")
+                    continue
+                payload.setdefault(
+                    "timestamp",
+                    datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                )
+                payload.setdefault("source", "minipc_bateau")
+                mqtt_client.publish(MQTT_TOPIC, json.dumps(payload), qos=1)
+                print(f"Publie (JSON): {payload}")
+                continue
+
             if "Données GPS" in line or "Donnees GPS" in line:
                 in_block = True
                 block = []
