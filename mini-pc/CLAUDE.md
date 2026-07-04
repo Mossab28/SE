@@ -1,99 +1,95 @@
 # Contexte Mini PC — Bateau Nereides (bridge télémétrie)
 
-Instance Claude tournant **sur le mini-PC embarqué**. Ce mini-PC remplace le Raspberry Pi :
-il lit la trame série de l'électronique du bateau et la relaie vers le VPS (MQTT) + une
-interface pilote locale.
+Tu es une instance Claude qui tourne **sur le mini-PC embarqué** (Windows). Le mini-PC est
+une **alternative au Raspberry Pi** : il lit la trame série de l'électronique du bateau
+(ESP32) et la relaie vers le VPS (MQTT/dashboard/Grafana) + une interface pilote locale.
+
+> ⚠️ **Dernière mise à jour : 2026-07-04.** Fais `git pull` avant tout — le code a beaucoup
+> évolué (format imbriqué, GPS en km/h, dossier `pilot-ui/`).
 
 ## Chaîne complète
 
 ```
-[Électronique bateau : batteries ∥ + contrôleur moteur (CM) + GPS]
-        │ USB Série (115200 baud) — trame JSON imbriquée, 1 ligne = 1 objet {...}
+[Électronique bateau : 2 batteries (BMS JBD, CAN) + contrôleur moteur CM (CAN) + GPS]
+        │ USB Série (115200 baud) — trames JSON imbriquées, 1 ligne = 1 objet {...}
         ▼
 [Mini PC]  ← TU ES ICI   (mini-pc/serial_to_mqtt.py)
-        ├── MQTT TLS  → VPS 212.227.88.180:8883  (dashboard online)
+        ├── MQTT TLS  → VPS 212.227.88.180:8883   (dashboard web + Grafana)
         ├── HTTP POST → https://nereides.pwn-ai.fr/backend/telemetry
-        └── WebSocket local :8765 → interface pilote (marche sans internet)
+        └── WebSocket local :8765 → interface pilote (pilot-ui/, marche sans internet)
         ▼
-[VPS] Mosquitto → Telegraf → InfluxDB / Backend FastAPI → WebSocket → Dashboard + Grafana
+[VPS] Mosquitto → Telegraf → InfluxDB → Grafana   +   Backend FastAPI → WebSocket → Dashboard
 ```
 
-## ⚠️ CHANGEMENT RÉCENT — nouveau format de trame imbriqué
+## Format des trames (ESP32 → série), depuis le firmware `BoiteTelemMonaco`
 
-L'électronique n'envoie plus du texte GPS : elle envoie une **trame JSON imbriquée** sur le
-port série, une par ligne. Le bridge la **relaie telle quelle** vers MQTT/HTTP ; c'est le
-**backend (sur le VPS)** qui l'aplatit via `flatten_nested()` (`backend.py`).
-
-Exemple de trame reçue sur le série :
+Chaque ligne = un objet JSON **imbriqué** partiel. Le CM envoie 2 trames alternées :
 ```json
-{
-  "Batterie1": { "SOC": 92.0, "Tension": 48.8, "Current": 27.6 },
-  "Batterie2": { "SOC": 91.0, "Tension": 48.9, "Current": 31.1 },
-  "CM": { "RPM": 1792, "Current": 58.7, "Tension": 48.9, "ErrorCode": 0,
-          "TempMoteur": 50.3, "TempCM": 47.3, "ThrottleV": 0.9,
-          "Commande": "Forward", "FNB": "F", "Feedback": "Forward" },
-  "GPS": { "vitesse": 5.5, "latitude": 48.267340, "longitude": 3.723456, "Satellites": 8 }
-}
+{"CM":{"Current":6.1,"RPM":818,"Tension":82.3,"ErrorCode":42}}
+{"CM":{"TempMoteur":0,"TempCM":49,"ThrottleV":2.68,"Commande":"Backward","FNB":"B","Feedback":"Backward"}}
+{"Batterie1":{"SOC":90,"Tension":48.5,"Current":22,"Protection":0}}
+{"Batterie2":{"SOC":88,"Tension":48.6,"Current":24,"Protection":0}}
+{"GPS":{"vitesse":12.0,"latitude":48.2675,"longitude":3.7236,"Satellites":9}}
 ```
+- Clés batteries en **majuscule** `Batterie1`/`Batterie2` (aligné avec le mapping de réception).
+- **`GPS.vitesse` est en km/h** (le firmware convertit les nœuds ×1.852). NE PAS reconvertir.
+- Le BMS **n'envoie pas** de température batterie (que SOC/Tension/Courant/Protection).
 
-### Ce qui a changé dans le code (commit `feat: support nested telemetry format`)
-- `mini-pc/serial_to_mqtt.py` (`run_serial_mode`) : détecte une ligne série `{...}`, la parse,
-  ajoute `timestamp`+`source` si absents, publie **sans transformer** (fallback texte GPS conservé).
-- `backend.py` (VPS) : `flatten_nested()` convertit l'imbriqué → champs plats. Branché sur MQTT
-  **et** POST. **Rétro-compatible** : une trame déjà plate passe inchangée.
-- Frontend (`index.html`/`script.js`/`styles.css`) : section « Batteries — pack parallèle »
-  (pack agrégé + les 2 branches côte à côte) + champs Feedback/ErrorCode du CM.
+## Comment le bridge traite ça (`serial_to_mqtt.py`)
 
-### Mapping imbriqué → champs plats (fait côté backend, pas ici)
-| Source | Champ plat | Note |
-|--------|-----------|------|
-| `Batterie1/2.SOC` | `battery1_soc` / `battery2_soc` | + `battery_soc` = moyenne |
-| `Batterie1/2.Tension` | `battery1_voltage` / `battery2_voltage` | + `battery_voltage` = moyenne (bus partagé) |
-| `Batterie1/2.Current` | `battery1_current` / `battery2_current` | + `battery_current` = **somme** (parallèle) |
-| — | `battery_power` | = V_moy × I_somme / 1000 |
-| `CM.RPM/Current/Tension` | `motor_speed` / `motor_current` / `motor_voltage` | |
-| `CM.TempMoteur/TempCM` | `motor_temperature` / `controller_temperature` | |
-| `CM.ThrottleV/Commande/FNB/Feedback` | `controller_throttle` / `controller_mode` / `controller_fnb` / `controller_feedback` | |
-| `CM.ErrorCode` | `controller_error_code` | 0 → `controller_safety=Nominal`, sinon `Fault` |
-| `GPS.vitesse` (nœuds) | `gps_speed_kmh` | × 1.852 |
-| `GPS.latitude/longitude/Satellites` | `gps_lat` / `gps_lng` / `gps_satellites` | |
+1. Il **relaie la trame brute** (imbriquée) vers MQTT → c'est le **backend VPS** qui l'aplatit
+   (`flatten_nested`) → `battery1_*`, `battery2_*`, pack agrégé, `motor_*`, `controller_*`, `gps_*`.
+2. En parallèle il **aplatit localement** (copie de `flatten_nested`) pour alimenter le
+   **WebSocket pilote** `:8765` (l'UI `pilot-ui/` attend du plat).
+3. Modes de test sans matériel : `--fake`, `--scenario`, `--race` (données simulées plates).
 
-> **Batteries en PARALLÈLE** : elles se déchargent simultanément → tension partagée (moyenne),
-> courants additionnés (somme), SOC moyenné. Chaque branche reste visible individuellement.
+## Lancer le système (commandes exactes)
 
-## Lancer le bridge
+```bat
+cd C:\Users\SE\Desktop\SE
+git pull
 
-```bash
-cd SE && git pull          # récupérer le dernier code
 cd mini-pc
 pip install -r requirements.txt
-copy .env.example .env     # puis éditer : SERIAL_PORT = le bon port COM
-python serial_to_mqtt.py   # mode réel (lit le série, publie)
+copy .env.example .env        REM puis éditer SERIAL_PORT avec le bon COM
+
+REM 1) le bridge (lit le série, publie MQTT + WS pilote)
+python serial_to_mqtt.py
+REM (ou start_bridge.bat)
+
+REM 2) l'interface pilote (dans 2 autres fenêtres)
+serve_pilot.bat               REM sert pilot-ui/ sur http://localhost:8080
+launch_kiosk.bat              REM ouvre Chrome/Edge en plein écran
 ```
 
-Config `.env` importante :
-- `SERIAL_PORT` = port COM de l'électronique (Gestionnaire de périphériques → Ports COM & LPT)
-- `MQTT_HOST=212.227.88.180`, `MQTT_PORT=8883`, `MQTT_TLS=true` (TLS vers le VPS)
-- `MQTT_TOPIC=nereides/telemetry`
+`.env` important : `SERIAL_PORT=COMx`, `MQTT_HOST=212.227.88.180`, `MQTT_PORT=8883`,
+`MQTT_TLS=true`, `MQTT_TOPIC=nereides/telemetry`.
+Trouver le COM : Gestionnaire de périphériques → Ports (COM & LPT) → "USB Serial"/"CP210x"/"CH340".
 
-### Modes de test (sans matériel)
-- `python serial_to_mqtt.py --fake` : données simulées (format **plat**, pas de série)
-- `python serial_to_mqtt.py --scenario` : cycle NORMAL/WARNING/ALERT/RECOVERY
-- `python serial_to_mqtt.py --race` : course 4 min avec physique cohérente
-- Ces modes n'exercent pas encore les 2 batteries imbriquées (données plates).
+## Interface pilote — `pilot-ui/`
+
+Fichiers `pilot-ui/index.html` + `script.js` + `styles.css`. Affiche :
+Vitesse, **Batterie 1** (SOC/Temp/Courant), **Batterie 2** (SOC/Temp/Courant), **CM** (Temp/Courant).
+Se connecte à `ws://localhost:8765` (le bridge). La case Temp batterie reste `--` (BMS ne l'envoie pas).
 
 ## Vérifier que ça marche
-- Console : `Publie (JSON): {...}` à chaque trame réelle (ou `Publie: {...}` en mode fake).
-- Dashboard online : https://nereides.pwn-ai.fr/ → section « Batteries — pack parallèle »
-  doit montrer SOC/tension/courant du pack **et** des 2 branches.
-- Grafana : http://212.227.88.180/grafana/ (mossab / mossab123).
 
-## Dépannage
-- **Port COM introuvable** : driver USB (CP210x / CH340) ; vérifier le câble.
-- **`Publie (JSON)` absent mais trames reçues** : la ligne série n'est peut-être pas un JSON
-  sur **une seule ligne** `{...}` — vérifier le firmware (pas de retour à la ligne au milieu).
-- **Dashboard vide côté batteries** : s'assurer que le **backend du VPS** a bien la version
-  avec `flatten_nested` (sinon l'imbriqué n'est pas aplati). Voir `backend.py`.
-- **MQTT refusé** : le VPS écoute en TLS sur 8883 (`require_certificate false`) ; internet OK ?
+- Console bridge : `Publie (JSON): {...}` à chaque trame.
+- Dashboard web : https://nereides.pwn-ai.fr/ → section « Batteries — pack parallèle ».
+- Grafana : http://212.227.88.180/grafana/ (mossab / mossab123), dashboard "Nereides - Telemetrie Bateau".
 
-## Accès Pi (legacy, si besoin) : `docs/RASPBERRY_PI_ACCESS.md` — user `nereides`.
+## Pièges connus / à savoir
+
+- **Horloge du mini-PC** : garde-la à l'heure (NTP Windows). Telegraf horodate désormais à la
+  réception côté VPS, donc un décalage n'empêche plus l'affichage Grafana, mais reste propre.
+- **Cohérence avec le Raspberry** : les deux produisent les mêmes champs. Seule différence, le
+  **pack agrégé** (battery_soc/voltage/current/power) n'est calculé que par le backend (donc via
+  le mini-PC il apparaît ; via `ecran.py` du Pi il n'est pas calculé).
+- **Température batterie** : indisponible tant que le firmware ne décode pas la trame température
+  du BMS JBD (il faut le `tableau_can_batterie.xlsx`).
+- **GPS** : ne remonte que si le module GPS est câblé (UART2 GPIO32/33 sur l'ESP) et a un fix.
+
+## Ne PAS refaire
+
+- Ne remets pas de conversion nœuds→km/h sur le GPS : le firmware envoie déjà des km/h.
+- Ne repasse pas les clés batteries en minuscule : c'est `Batterie1`/`Batterie2`.
