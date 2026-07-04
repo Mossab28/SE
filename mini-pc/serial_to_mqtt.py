@@ -203,15 +203,94 @@ def build_pilot_payload(data: dict) -> dict:
     }
 
 
-def connect_serial() -> serial.Serial:
-    while True:
+import serial.tools.list_ports
+
+# Descriptions typiques des convertisseurs USB-serie (ESP32 / adaptateurs)
+_USB_SERIAL_HINTS = ("CH340", "CP210", "CP210x", "FTDI", "USB Serial", "USB-SERIAL", "Silicon Labs")
+
+
+def _looks_like_boat_data(ser: serial.Serial) -> bool:
+    """Ecoute brievement un port : renvoie True s'il crache une trame JSON du bateau."""
+    try:
+        ser.reset_input_buffer()
+    except Exception:
+        pass
+    end = time.time() + 2.5
+    buf = ""
+    while time.time() < end:
         try:
-            ser = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=2)
-            print(f"Serie connectee sur {SERIAL_PORT}")
-            return ser
-        except serial.SerialException:
-            print(f"Port {SERIAL_PORT} indisponible, retry dans 2s...")
+            chunk = ser.read(256).decode("utf-8", errors="ignore")
+        except Exception:
+            return False
+        if chunk:
+            buf += chunk
+            # trame imbriquee du firmware, ou ancien format texte GPS
+            if any(k in buf for k in ("Batterie1", "Batterie2", '"CM"', '"GPS"', "Donnees GPS", "Données GPS")):
+                return True
+            if buf.count("{") >= 1 and buf.count("}") >= 1:
+                return True
+    return False
+
+
+def _candidate_ports() -> list[str]:
+    """Liste les ports COM plausibles (USB-serie d'abord), tries."""
+    ports = list(serial.tools.list_ports.comports())
+    usb = [p.device for p in ports if any(h.lower() in (p.description or "").lower() for h in _USB_SERIAL_HINTS)]
+    others = [p.device for p in ports if p.device not in usb]
+    return usb + others
+
+
+def connect_serial() -> serial.Serial:
+    """Connecte le port serie.
+
+    - SERIAL_PORT=auto (defaut recommande) : scanne tous les ports USB-serie et
+      choisit automatiquement celui qui envoie des trames du bateau. Plus besoin
+      de connaitre le numero COM exact.
+    - SERIAL_PORT=COMx : force ce port precis.
+    """
+    forced = SERIAL_PORT.strip().lower() not in ("", "auto")
+
+    while True:
+        if forced:
+            try:
+                ser = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=2)
+                print(f"Serie connectee sur {SERIAL_PORT}")
+                return ser
+            except serial.SerialException:
+                print(f"Port {SERIAL_PORT} indisponible, retry dans 2s...")
+                time.sleep(2)
+                continue
+
+        # Mode AUTO : scanner les ports et tester lequel donne des donnees
+        candidates = _candidate_ports()
+        if not candidates:
+            print("Aucun port USB-serie detecte, rescan dans 2s... (branche l'ESP)")
             time.sleep(2)
+            continue
+
+        print(f"Ports candidats: {candidates} — test en cours...")
+        # 1er passage : port qui envoie vraiment des trames du bateau
+        for dev in candidates:
+            try:
+                ser = serial.Serial(dev, SERIAL_BAUD, timeout=2)
+            except serial.SerialException:
+                continue
+            if _looks_like_boat_data(ser):
+                print(f"Serie connectee sur {dev} (auto : trames detectees)")
+                return ser
+            ser.close()
+
+        # 2e passage : a defaut, prendre le 1er port ouvrable (GPS peut etre sans fix)
+        for dev in candidates:
+            try:
+                ser = serial.Serial(dev, SERIAL_BAUD, timeout=2)
+                print(f"Serie connectee sur {dev} (auto : ouvert, en attente de trames)")
+                return ser
+            except serial.SerialException:
+                continue
+
+        print("Ports vus mais aucun ouvrable, rescan dans 2s...")
+        time.sleep(2)
 
 
 def connect_mqtt() -> mqtt.Client:
