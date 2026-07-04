@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nereides Pilot Interface</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-authenticated="true">
+  <main class="pilot-shell">
+    <header class="pilot-header">
+      <div class="signal-card">
+        <span class="signal-label">Liaison</span>
+        <strong id="link-state">Non connectee</strong>
+      </div>
+      <div class="signal-card signal-card-wide">
+        <span class="signal-label">Etat</span>
+        <strong id="mission-state">En attente</strong>
+      </div>
+      <div class="signal-card">
+        <span class="signal-label">Maj</span>
+        <strong id="last-update">--:--:--</strong>
+      </div>
+    </header>
+
+    <section class="alert-banner" id="alert-banner">
+      <span id="alert-state">Aucune alerte active</span>
+    </section>
+
+    <section class="priority-board" aria-label="Mesures prioritaires pilote">
+      <article class="pilot-card pilot-card-hero pilot-span" data-tone-target="gps_speed_kmh">
+        <span class="pilot-card-label">Vitesse</span>
+        <strong class="pilot-card-value" data-field="gps_speed_kmh">--</strong>
+        <span class="pilot-card-unit">noeuds</span>
+      </article>
+
+      <article class="pilot-card pilot-group pilot-span" data-tone-target="battery1_soc">
+        <span class="pilot-card-label">Batterie 1</span>
+        <div class="pilot-group-row">
+          <div class="pilot-metric">
+            <span class="pilot-metric-label">SOC</span>
+            <strong class="pilot-metric-value" data-field="battery1_soc">--</strong>
+            <span class="pilot-metric-unit">%</span>
+          </div>
+          <div class="pilot-metric">
+            <span class="pilot-metric-label">Temp</span>
+            <strong class="pilot-metric-value" data-field="battery1_temp">--</strong>
+            <span class="pilot-metric-unit">degC</span>
+          </div>
+          <div class="pilot-metric">
+            <span class="pilot-metric-label">Courant</span>
+            <strong class="pilot-metric-value" data-field="battery1_current">--</strong>
+            <span class="pilot-metric-unit">A</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="pilot-card pilot-group pilot-span" data-tone-target="battery2_soc">
+        <span class="pilot-card-label">Batterie 2</span>
+        <div class="pilot-group-row">
+          <div class="pilot-metric">
+            <span class="pilot-metric-label">SOC</span>
+            <strong class="pilot-metric-value" data-field="battery2_soc">--</strong>
+            <span class="pilot-metric-unit">%</span>
+          </div>
+          <div class="pilot-metric">
+            <span class="pilot-metric-label">Temp</span>
+            <strong class="pilot-metric-value" data-field="battery2_temp">--</strong>
+            <span class="pilot-metric-unit">degC</span>
+          </div>
+          <div class="pilot-metric">
+            <span class="pilot-metric-label">Courant</span>
+            <strong class="pilot-metric-value" data-field="battery2_current">--</strong>
+            <span class="pilot-metric-unit">A</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="pilot-card pilot-group pilot-span" data-tone-target="controller_temperature">
+        <span class="pilot-card-label">CM</span>
+        <div class="pilot-group-row">
+          <div class="pilot-metric">
+            <span class="pilot-metric-label">Temp</span>
+            <strong class="pilot-metric-value" data-field="controller_temperature">--</strong>
+            <span class="pilot-metric-unit">degC</span>
+          </div>
+          <div class="pilot-metric">
+            <span class="pilot-metric-label">Courant</span>
+            <strong class="pilot-metric-value" data-field="controller_current">--</strong>
+            <span class="pilot-metric-unit">A</span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

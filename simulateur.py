@@ -79,7 +79,7 @@ def build_payload() -> dict:
             "Feedback": random.choice(["Forward", "Forward", "Stationary", "Backward"]),
         },
         "GPS": {
-            "vitesse": round(random.uniform(3.0, 19.0), 1),  # noeuds
+            "vitesse": round(random.uniform(5.0, 35.0), 1),  # km/h (comme le firmware ESP)
             "latitude": round(GPS_LAT_BASE + random.uniform(-0.005, 0.005), 6),
             "longitude": round(GPS_LNG_BASE + random.uniform(-0.005, 0.005), 6),
             "Satellites": random.randint(6, 14),

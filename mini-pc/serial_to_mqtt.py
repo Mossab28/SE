@@ -152,9 +152,9 @@ def flatten_nested(raw: dict) -> dict:
         sats = _num(gps, "Satellites")
         if sats is not None:
             out["gps_satellites"] = int(sats)
-        knots = _num(gps, "vitesse")
-        if knots is not None:
-            out["gps_speed_kmh"] = round(knots * 1.852, 1)
+        vitesse = _num(gps, "vitesse")
+        if vitesse is not None:
+            out["gps_speed_kmh"] = round(vitesse, 1)  # firmware ESP envoie deja des km/h
 
     return {k: v for k, v in out.items() if v is not None}
 
