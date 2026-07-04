@@ -209,6 +209,28 @@ import serial.tools.list_ports
 _USB_SERIAL_HINTS = ("CH340", "CP210", "CP210x", "FTDI", "USB Serial", "USB-SERIAL", "Silicon Labs")
 
 
+def _open_serial(dev: str) -> serial.Serial:
+    """Ouvre un port serie comme le fait le moniteur de l'IDE Arduino.
+
+    IMPORTANT : sur les cartes ESP32/CH340, RTS est cable sur EN (reset) et DTR
+    sur GPIO0. Il faut asserter DTR=True et RTS=True AVANT l'ouverture, sinon
+    l'ESP reste maintenu en reset et n'envoie jamais rien (0 octet).
+    """
+    ser = serial.Serial()
+    ser.port = dev
+    ser.baudrate = SERIAL_BAUD
+    ser.timeout = 2
+    ser.dtr = True
+    ser.rts = True
+    ser.open()
+    try:
+        ser.setDTR(True)
+        ser.setRTS(True)
+    except Exception:
+        pass
+    return ser
+
+
 def _looks_like_boat_data(ser: serial.Serial) -> bool:
     """Ecoute brievement un port : renvoie True s'il crache une trame JSON du bateau."""
     try:
@@ -253,8 +275,8 @@ def connect_serial() -> serial.Serial:
     while True:
         if forced:
             try:
-                ser = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=2)
-                print(f"Serie connectee sur {SERIAL_PORT}")
+                ser = _open_serial(SERIAL_PORT)
+                print(f"Serie connectee sur {SERIAL_PORT} (DTR/RTS asserted)")
                 return ser
             except serial.SerialException:
                 print(f"Port {SERIAL_PORT} indisponible, retry dans 2s...")
@@ -272,7 +294,7 @@ def connect_serial() -> serial.Serial:
         # 1er passage : port qui envoie vraiment des trames du bateau
         for dev in candidates:
             try:
-                ser = serial.Serial(dev, SERIAL_BAUD, timeout=2)
+                ser = _open_serial(dev)
             except serial.SerialException:
                 continue
             if _looks_like_boat_data(ser):
@@ -283,7 +305,7 @@ def connect_serial() -> serial.Serial:
         # 2e passage : a defaut, prendre le 1er port ouvrable (GPS peut etre sans fix)
         for dev in candidates:
             try:
-                ser = serial.Serial(dev, SERIAL_BAUD, timeout=2)
+                ser = _open_serial(dev)
                 print(f"Serie connectee sur {dev} (auto : ouvert, en attente de trames)")
                 return ser
             except serial.SerialException:
