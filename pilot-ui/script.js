@@ -7,8 +7,16 @@ const fields = {
   battery2_current: "--",
   controller_temperature: "--",
   controller_current: "--",
+  motor_power: "--",
   controller_safety: "--",
   gps_speed_kmh: "--",
+};
+
+// Seuils d'alerte : la case passe orange (warn) puis rouge (alert)
+const TONE_RULES = {
+  battery1_temp: { warn: 48, alert: 53 },
+  battery2_temp: { warn: 48, alert: 53 },
+  controller_temperature: { warn: 70, alert: 85 },
 };
 
 const statusConfig = {
@@ -52,13 +60,20 @@ function appendEvent(message) {
   }
 }
 
-function getTemporaryTone(key) {
-  if (!temporaryToneMap[key]) {
-    const index = Math.floor(Math.random() * RANDOM_TONES.length);
-    temporaryToneMap[key] = RANDOM_TONES[index];
+// Ton réel selon les seuils (ou "" si pas de règle / pas de valeur numérique)
+function toneFor(key) {
+  const rule = TONE_RULES[key];
+  const v = parseFloat(fields[key]);
+  if (!rule || Number.isNaN(v)) {
+    return "";
   }
-
-  return temporaryToneMap[key];
+  if (v >= rule.alert) {
+    return "tone-alert";
+  }
+  if (rule.warn !== undefined && v >= rule.warn) {
+    return "tone-warn";
+  }
+  return "tone-ok";
 }
 
 function formatValue(key, value) {
@@ -91,6 +106,12 @@ function derivePilotFields(raw) {
   const controllerTemperature = raw.controller_temperature ?? raw.cm_temperature ?? raw.motor_temperature ?? null;
   const controllerCurrent = raw.controller_current ?? raw.motor_current ?? raw.cm_current ?? null;
   const controllerSafety = raw.controller_safety ?? raw.controller_fnb ?? "--";
+  // Puissance moteur = tension x courant (kW)
+  const mv = raw.motor_voltage ?? raw.cm_voltage ?? null;
+  const mi = raw.motor_current ?? raw.controller_current ?? null;
+  const motorPower = (typeof mv === "number" && typeof mi === "number")
+    ? Math.round((mv * mi) / 100) / 10
+    : null;
 
   return {
     gps_speed_kmh: (raw.gps_speed_kmh ?? raw.gps_speed ?? 0) * 0.539957,
@@ -105,6 +126,7 @@ function derivePilotFields(raw) {
     battery2_current: raw.battery2_current ?? null,
     controller_temperature: controllerTemperature,
     controller_current: controllerCurrent,
+    motor_power: motorPower,
   };
 }
 
@@ -121,7 +143,17 @@ function updatePilotCards() {
   document.querySelectorAll("[data-tone-target]").forEach((node) => {
     const key = node.dataset.toneTarget;
     node.classList.remove("tone-ok", "tone-warn", "tone-alert");
-    node.classList.add(getTemporaryTone(key));
+    const tone = toneFor(key);
+    if (tone) {
+      node.classList.add(tone);
+    }
+  });
+
+  // Alerte par case : orange (warn) / rouge (alert) selon les seuils
+  document.querySelectorAll("[data-alert]").forEach((node) => {
+    const tone = toneFor(node.dataset.alert);
+    node.classList.toggle("cell-warn", tone === "tone-warn");
+    node.classList.toggle("cell-hot", tone === "tone-alert");
   });
 }
 
