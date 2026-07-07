@@ -106,11 +106,11 @@ function derivePilotFields(raw) {
   const controllerTemperature = raw.controller_temperature ?? raw.cm_temperature ?? raw.motor_temperature ?? null;
   const controllerCurrent = raw.controller_current ?? raw.motor_current ?? raw.cm_current ?? null;
   const controllerSafety = raw.controller_safety ?? raw.controller_fnb ?? "--";
-  // Puissance moteur = tension x courant (kW)
+  // Puissance moteur = tension x courant (W)
   const mv = raw.motor_voltage ?? raw.cm_voltage ?? null;
   const mi = raw.motor_current ?? raw.controller_current ?? null;
   const motorPower = (typeof mv === "number" && typeof mi === "number")
-    ? Math.round((mv * mi) / 100) / 10
+    ? Math.round(mv * mi)
     : null;
 
   return {
