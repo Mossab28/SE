@@ -11,6 +11,9 @@ const fields = {
   controller_safety: "--",
   gps_speed_kmh: "--",
   gps_speed_kmh_exact: "--",
+  gps_lat: null,
+  gps_lng: null,
+  gps_satellites: null,
   solar_temperature: "--",
 };
 
@@ -134,6 +137,9 @@ function derivePilotFields(raw) {
     controller_temperature: controllerTemperature,
     controller_current: controllerCurrent,
     motor_power: motorPower,
+    gps_lat: raw.gps_lat ?? null,
+    gps_lng: raw.gps_lng ?? null,
+    gps_satellites: raw.gps_satellites ?? null,
   };
 }
 
@@ -169,6 +175,23 @@ function updatePilotCards() {
     node.classList.toggle("cell-warn", tone === "tone-warn");
     node.classList.toggle("cell-hot", tone === "tone-alert");
   });
+
+  updateGpsStatus();
+}
+
+// Statut du fix GPS, affiche a la place de l'ancien "Pilotage actif"
+function updateGpsStatus() {
+  const sat = fields.gps_satellites;
+  const satText = typeof sat === "number" ? `${sat} sat` : "";
+  let text;
+  if (!hasLiveTelemetry) {
+    text = "En attente de donnees";
+  } else if (typeof fields.gps_lat === "number" && typeof fields.gps_lng === "number") {
+    text = satText ? `Fix acquis (${satText})` : "Fix acquis";
+  } else {
+    text = satText ? `Recherche fix... (${satText})` : "Recherche fix...";
+  }
+  setText("mission-state", text);
 }
 
 function renderStatuses() {
@@ -207,7 +230,6 @@ function stampUpdate() {
 
 function setConnectionState(connected) {
   setText("link-state", connected ? "Connectee" : "Non connectee");
-  setText("mission-state", connected ? "Pilotage actif" : "En attente de donnees");
   setText("alert-state", "Nominal");
 
   statusConfig.comms = connected
@@ -215,6 +237,7 @@ function setConnectionState(connected) {
     : { text: "En attente", tone: "neutral" };
 
   renderStatuses();
+  updateGpsStatus();
 }
 
 function applyPayload(payload) {
