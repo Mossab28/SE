@@ -48,6 +48,7 @@ class TelemetryFrame(BaseModel):
     controller_feedback: str | None = None
     controller_error_code: int | None = None
     controller_throttle: float | None = None
+    solar_temperature: float | None = None
     boat_distance_km: float | None = None
     boat_activity_duration: str | None = None
     gps_lat: float | None = None
@@ -70,7 +71,7 @@ MQTT_TOPIC = os.getenv("MQTT_TOPIC", "nereides/telemetry")
 AI_PREDICTOR_URL = os.getenv("AI_PREDICTOR_URL", "http://localhost:8002")
 
 
-NESTED_KEYS = ("Batterie1", "Batterie2", "CM", "GPS")
+NESTED_KEYS = ("Batterie1", "Batterie2", "CM", "GPS", "Thermistance")
 
 
 def _num(source: dict[str, Any], key: str) -> float | None:
@@ -147,6 +148,10 @@ def flatten_nested(raw: dict[str, Any]) -> dict[str, Any]:
         vitesse = _num(gps, "vitesse")
         if vitesse is not None:
             out["gps_speed_kmh"] = round(vitesse, 1)  # firmware ESP envoie deja des km/h
+
+    thermistance = raw.get("Thermistance") or {}
+    if thermistance:
+        out["solar_temperature"] = _num(thermistance, "temp")
 
     return {k: v for k, v in out.items() if v is not None}
 
