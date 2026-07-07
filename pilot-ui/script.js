@@ -10,6 +10,7 @@ const fields = {
   motor_power: "--",
   controller_safety: "--",
   gps_speed_kmh: "--",
+  solar_temperature: "--",
 };
 
 // Seuils d'alerte : la case passe orange (warn) puis rouge (alert)
@@ -17,6 +18,7 @@ const TONE_RULES = {
   battery1_temp: { warn: 48, alert: 53 },
   battery2_temp: { warn: 48, alert: 53 },
   controller_temperature: { warn: 70, alert: 85 },
+  solar_temperature: { warn: 65, alert: 80 },
 };
 
 const statusConfig = {
@@ -115,6 +117,7 @@ function derivePilotFields(raw) {
 
   return {
     gps_speed_kmh: (raw.gps_speed_kmh ?? raw.gps_speed ?? 0) * 0.539957,
+    solar_temperature: raw.solar_temperature ?? null,
     controller_safety: controllerSafety,
     // Batterie 1 (branche parallele)
     battery1_soc: raw.battery1_soc ?? null,
