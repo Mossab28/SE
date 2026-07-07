@@ -10,6 +10,7 @@ const fields = {
   motor_power: "--",
   controller_safety: "--",
   gps_speed_kmh: "--",
+  gps_speed_kmh_exact: "--",
   solar_temperature: "--",
 };
 
@@ -115,8 +116,11 @@ function derivePilotFields(raw) {
     ? Math.round(mv * mi)
     : null;
 
+  const rawSpeedKmh = raw.gps_speed_kmh ?? raw.gps_speed ?? null;
+
   return {
-    gps_speed_kmh: (raw.gps_speed_kmh ?? raw.gps_speed ?? 0) * 0.539957,
+    gps_speed_kmh: (rawSpeedKmh ?? 0) * 0.539957,
+    gps_speed_kmh_exact: rawSpeedKmh,
     solar_temperature: raw.solar_temperature ?? null,
     controller_safety: controllerSafety,
     // Batterie 1 (branche parallele)
@@ -141,6 +145,13 @@ function updatePilotCards() {
   document.querySelectorAll("[data-field]").forEach((node) => {
     const key = node.dataset.field;
     node.textContent = formatValue(key, fields[key]);
+  });
+
+  // Vitesse exacte en km/h (2 decimales), affichee en petit a cote des noeuds
+  document.querySelectorAll("[data-field-precise]").forEach((node) => {
+    const key = node.dataset.fieldPrecise;
+    const v = fields[key];
+    node.textContent = typeof v === "number" ? `${v.toFixed(2)} km/h` : "-- km/h";
   });
 
   document.querySelectorAll("[data-tone-target]").forEach((node) => {

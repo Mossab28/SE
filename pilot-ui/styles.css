@@ -379,3 +379,11 @@ body {
     50%      { box-shadow: inset 0 0 0 2px rgba(255, 60, 45, 0.95); }
   }
 }
+
+/* ---- Vitesse exacte km/h (petit texte a cote des noeuds) ---- */
+.pilot-card-subvalue {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
