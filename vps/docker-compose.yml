@@ -92,6 +92,8 @@ services:
     restart: unless-stopped
     ports:
       - "8001:8000"
+    volumes:
+      - backend-uploads:/app/uploads
     environment:
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
@@ -122,3 +124,4 @@ volumes:
   grafana-data:
   mosquitto-data:
   mosquitto-certs:
+  backend-uploads:

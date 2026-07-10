@@ -4,13 +4,16 @@ import asyncio
 import json
 import os
 import urllib.request
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import paho.mqtt.client as mqtt
 from pydantic import BaseModel, ConfigDict
 
@@ -246,6 +249,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+ALLOWED_UPLOAD_TYPES = {
+    "image/jpeg": (".jpg", "image"),
+    "image/png": (".png", "image"),
+    "image/gif": (".gif", "image"),
+    "image/webp": (".webp", "image"),
+    "video/mp4": (".mp4", "video"),
+    "video/webm": (".webm", "video"),
+    "video/quicktime": (".mov", "video"),
+}
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
 
 @app.get("/health")
 def health() -> dict[str, str]:
@@ -275,13 +293,33 @@ async def ingest_telemetry(raw: dict[str, Any]) -> dict[str, str]:
 
 class DisplayTrigger(BaseModel):
     text: str | None = None
-    image_url: str | None = None
+    media_url: str | None = None
+    media_type: str = "image"  # "image" | "video"
     duration_s: float = 5.0
+
+
+@app.post("/upload")
+async def upload_media(file: UploadFile = File(...)) -> dict[str, str]:
+    """Store an image/video uploaded from a client and return a public URL for it,
+    for use as `media_url` in POST /trigger."""
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_UPLOAD_TYPES:
+        raise HTTPException(status_code=415, detail=f"Type non supporte: {content_type}")
+
+    body = await file.read()
+    if len(body) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Fichier trop volumineux (max 50 Mo)")
+
+    ext, media_type = ALLOWED_UPLOAD_TYPES[content_type]
+    filename = f"{uuid.uuid4().hex}{ext}"
+    (UPLOAD_DIR / filename).write_bytes(body)
+
+    return {"url": f"/backend/uploads/{filename}", "media_type": media_type}
 
 
 @app.post("/trigger")
 async def trigger_display(trigger: DisplayTrigger) -> dict[str, str]:
-    """Push a one-off overlay (text/image) to pilot screens.
+    """Push a one-off overlay (text/image/video) to pilot screens.
 
     Broadcast over the backend WS (dashboard clients) AND publish over MQTT so the
     Raspberry Pi (ecran.py, which relays it to the local pilot-ui over ws://localhost:8765)
@@ -290,7 +328,8 @@ async def trigger_display(trigger: DisplayTrigger) -> dict[str, str]:
     message = {
         "type": "display",
         "text": trigger.text,
-        "image_url": trigger.image_url,
+        "media_url": trigger.media_url,
+        "media_type": trigger.media_type,
         "duration_s": trigger.duration_s,
     }
     await broadcast(message)

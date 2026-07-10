@@ -108,12 +108,36 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 #status.ok { color: var(--ok); }
 #status.err { color: var(--alert); }
-#preview {
+#preview, #preview-video {
   max-width: 100%;
   max-height: 200px;
   border-radius: 10px;
   border: 2px solid var(--line);
   display: none;
+}
+input[type="file"] {
+  width: 100%;
+  color: var(--muted);
+  font-size: 13px;
+}
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.divider::before, .divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+#upload-status {
+  font-size: 12px;
+  color: var(--muted);
 }
 </style>
 </head>
@@ -129,9 +153,18 @@ button:disabled { opacity: 0.5; cursor: default; }
       </div>
 
       <div>
-        <label for="image">Image (URL)</label>
-        <input type="url" id="image" placeholder="https://...jpg">
+        <label for="mediaFile">Image ou video (depuis ce PC)</label>
+        <input type="file" id="mediaFile" accept="image/*,video/*">
+        <div id="upload-status"></div>
         <img id="preview" alt="apercu">
+        <video id="preview-video" controls muted></video>
+      </div>
+
+      <div class="divider">ou</div>
+
+      <div>
+        <label for="mediaUrl">Lien direct (URL)</label>
+        <input type="url" id="mediaUrl" placeholder="https://...jpg ou .mp4">
       </div>
 
       <div class="row">
@@ -154,23 +187,69 @@ button:disabled { opacity: 0.5; cursor: default; }
   </div>
 
   <script>
-    const BACKEND_URL = "https://nereides.pwn-ai.fr/backend/trigger";
+    const BACKEND_ORIGIN = "https://nereides.pwn-ai.fr/backend";
+    const TRIGGER_URL = BACKEND_ORIGIN + "/trigger";
+    const UPLOAD_URL = BACKEND_ORIGIN + "/upload";
 
     const textEl = document.getElementById("text");
-    const imageEl = document.getElementById("image");
+    const fileEl = document.getElementById("mediaFile");
+    const urlEl = document.getElementById("mediaUrl");
     const durationEl = document.getElementById("duration");
     const previewEl = document.getElementById("preview");
+    const previewVideoEl = document.getElementById("preview-video");
+    const uploadStatusEl = document.getElementById("upload-status");
     const statusEl = document.getElementById("status");
     const sendBtn = document.getElementById("send");
 
-    imageEl.addEventListener("input", function() {
-      const url = imageEl.value.trim();
-      if (url) {
+    // Rempli par l'upload (prioritaire sur le champ URL si present)
+    let uploadedMedia = null; // { url, media_type }
+
+    function showPreview(url, mediaType) {
+      if (mediaType === "video") {
+        previewVideoEl.src = url;
+        previewVideoEl.style.display = "block";
+        previewEl.style.display = "none";
+      } else {
         previewEl.src = url;
         previewEl.style.display = "block";
-      } else {
-        previewEl.style.display = "none";
+        previewVideoEl.style.display = "none";
       }
+    }
+
+    fileEl.addEventListener("change", async function() {
+      const file = fileEl.files[0];
+      uploadedMedia = null;
+      if (!file) {
+        return;
+      }
+
+      uploadStatusEl.textContent = "Upload en cours...";
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch(UPLOAD_URL, { method: "POST", body: formData });
+        if (!res.ok) {
+          throw new Error("HTTP " + res.status);
+        }
+        const data = await res.json();
+        uploadedMedia = { url: BACKEND_ORIGIN.replace(/\/backend$/, "") + data.url, media_type: data.media_type };
+        showPreview(uploadedMedia.url, uploadedMedia.media_type);
+        uploadStatusEl.textContent = "Upload OK (" + data.media_type + ").";
+      } catch (err) {
+        uploadStatusEl.textContent = "Echec upload : " + err.message;
+      }
+    });
+
+    urlEl.addEventListener("input", function() {
+      const url = urlEl.value.trim();
+      if (!url) {
+        return;
+      }
+      uploadedMedia = null;
+      fileEl.value = "";
+      uploadStatusEl.textContent = "";
+      const mediaType = /\.(mp4|webm|mov)$/i.test(url) ? "video" : "image";
+      showPreview(url, mediaType);
     });
 
     document.querySelectorAll(".presets button").forEach(function(btn) {
@@ -181,11 +260,21 @@ button:disabled { opacity: 0.5; cursor: default; }
 
     async function sendTrigger() {
       const text = textEl.value.trim();
-      const imageUrl = imageEl.value.trim();
+      const urlValue = urlEl.value.trim();
       const durationS = Math.min(30, Math.max(1, Number(durationEl.value) || 8));
 
-      if (!text && !imageUrl) {
-        statusEl.textContent = "Ajoute un texte ou une image.";
+      let mediaUrl = null;
+      let mediaType = "image";
+      if (uploadedMedia) {
+        mediaUrl = uploadedMedia.url;
+        mediaType = uploadedMedia.media_type;
+      } else if (urlValue) {
+        mediaUrl = urlValue;
+        mediaType = /\.(mp4|webm|mov)$/i.test(urlValue) ? "video" : "image";
+      }
+
+      if (!text && !mediaUrl) {
+        statusEl.textContent = "Ajoute un texte, une image ou une video.";
         statusEl.className = "err";
         return;
       }
@@ -195,12 +284,13 @@ button:disabled { opacity: 0.5; cursor: default; }
       statusEl.className = "";
 
       try {
-        const res = await fetch(BACKEND_URL, {
+        const res = await fetch(TRIGGER_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: text || null,
-            image_url: imageUrl || null,
+            media_url: mediaUrl,
+            media_type: mediaType,
             duration_s: durationS,
           }),
         });

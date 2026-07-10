@@ -45,20 +45,42 @@ const temporaryToneMap = {};
 const WS_URL = "ws://localhost:8765";
 let displayOverlayTimer = null;
 
+function hideDisplayOverlay() {
+  const overlay = document.getElementById("display-overlay");
+  const videoNode = document.getElementById("display-overlay-video");
+  if (overlay) {
+    overlay.hidden = true;
+  }
+  if (videoNode) {
+    videoNode.pause();
+    videoNode.removeAttribute("src");
+    videoNode.load();
+  }
+}
+
 function showDisplayOverlay(payload) {
   const overlay = document.getElementById("display-overlay");
   const imageNode = document.getElementById("display-overlay-image");
+  const videoNode = document.getElementById("display-overlay-video");
   const textNode = document.getElementById("display-overlay-text");
-  if (!overlay || !imageNode || !textNode) {
+  if (!overlay || !imageNode || !videoNode || !textNode) {
     return;
   }
 
-  if (payload.image_url) {
-    imageNode.src = payload.image_url;
+  imageNode.hidden = true;
+  imageNode.removeAttribute("src");
+  videoNode.hidden = true;
+  videoNode.pause();
+  videoNode.removeAttribute("src");
+
+  if (payload.media_url && payload.media_type === "video") {
+    videoNode.src = payload.media_url;
+    videoNode.hidden = false;
+    videoNode.load();
+    videoNode.play().catch(function() {});
+  } else if (payload.media_url) {
+    imageNode.src = payload.media_url;
     imageNode.hidden = false;
-  } else {
-    imageNode.hidden = true;
-    imageNode.removeAttribute("src");
   }
 
   textNode.textContent = payload.text || "";
@@ -67,9 +89,7 @@ function showDisplayOverlay(payload) {
   clearTimeout(displayOverlayTimer);
   // Duree bornee (1s a 30s) : l'UI pilote est critique, l'overlay DOIT se refermer tout seul.
   const durationMs = Math.min(30, Math.max(1, Number(payload.duration_s) || 5)) * 1000;
-  displayOverlayTimer = window.setTimeout(function() {
-    overlay.hidden = true;
-  }, durationMs);
+  displayOverlayTimer = window.setTimeout(hideDisplayOverlay, durationMs);
 }
 
 
