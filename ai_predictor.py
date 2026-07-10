@@ -15,8 +15,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # ── Config ────────────────────────────────────────────────────────────────────
-BATTERY_CAPACITY_WH = float(os.getenv("BATTERY_CAPACITY_WH", "5000"))
+# Capacite calibree a partir d'un run reel (2026-07-03, 32 min, SOC 95%->90%,
+# energie integree = 320 Wh sur une branche => ~64 Wh/%SOC/branche => ~128 Wh/%SOC
+# pour le pack complet (2 batteries en parallele) => ~12800 Wh. Remplace la valeur
+# arbitraire precedente (5000 Wh). Voir ai_predictor.py::_live_discharge_estimate
+# pour l'estimation dynamique qui recalibre en direct pendant la course.
+BATTERY_CAPACITY_WH = float(os.getenv("BATTERY_CAPACITY_WH", "12800"))
 RACE_TARGET_HOURS = float(os.getenv("RACE_TARGET_HOURS", "1.0"))
+# Fenetre glissante pour la regression de decharge SOC en direct
+SOC_LIVE_WINDOW_S = float(os.getenv("SOC_LIVE_WINDOW_S", "600"))
+SOC_LIVE_MIN_SAMPLES = 20
+SOC_LIVE_MIN_DELTA_PCT = 0.3  # SOC quantifie en entiers : eviter le bruit sous ce seuil
 MONACO_LAT = 43.736834
 MONACO_LNG = 7.430180
 MQTT_HOST = os.getenv("MQTT_HOST", "mosquitto")
@@ -31,6 +40,7 @@ _weather: dict[str, Any] = {}
 _predictions: dict[str, Any] = {"status": "waiting"}
 _batt_hist: deque[tuple[float, float]] = deque(maxlen=60)
 _mot_hist: deque[tuple[float, float]] = deque(maxlen=60)
+_soc_hist: deque[tuple[float, float]] = deque(maxlen=1800)  # ~30min a 1 sample/s
 _PRIORITY = {"ok": 0, "warn": 1, "alert": 2}
 
 
@@ -111,6 +121,39 @@ def _thermal_alert(
     }
 
 
+def _live_discharge_estimate(soc_hist: deque[tuple[float, float]], current_soc: float) -> dict | None:
+    """Estime le temps de batterie restant a partir du declin REEL du SOC observe
+    pendant la navigation en cours (regression lineaire), plutot que d'une formule
+    theorique. C'est la methode la plus fiable une fois assez de donnees accumulees :
+    elle capture implicitement l'etat reel de la batterie, la meteo, le regime moteur
+    effectif, etc. sans avoir a les modeliser individuellement."""
+    if len(soc_hist) < SOC_LIVE_MIN_SAMPLES:
+        return None
+    now = time.time()
+    samples = [(t, v) for t, v in soc_hist if now - t <= SOC_LIVE_WINDOW_S]
+    if len(samples) < SOC_LIVE_MIN_SAMPLES:
+        return None
+    span_s = samples[-1][0] - samples[0][0]
+    delta_pct = samples[0][1] - samples[-1][1]
+    if span_s < 60 or delta_pct < SOC_LIVE_MIN_DELTA_PCT:
+        return None  # pas assez de declin mesurable sur la fenetre (SOC quantifie en %)
+
+    rate_pct_per_s = -_slope(samples)  # negatif car le SOC decroit
+    if rate_pct_per_s <= 0:
+        return None
+
+    hours = (current_soc / rate_pct_per_s) / 3600
+    # Confiance : proportionnelle a la couverture de la fenetre cible (max 30min)
+    confidence = round(min(1.0, span_s / SOC_LIVE_WINDOW_S), 2)
+    return {
+        "time_remaining_s": int(hours * 3600),
+        "rate_pct_per_hour": round(rate_pct_per_s * 3600, 2),
+        "window_s": int(span_s),
+        "samples": len(samples),
+        "confidence": confidence,
+    }
+
+
 def _compute(tel: dict, wx: dict) -> dict:
     now = time.time()
     pred: dict[str, Any] = {
@@ -118,10 +161,27 @@ def _compute(tel: dict, wx: dict) -> dict:
         "weather": wx,
     }
 
-    soc = tel.get("battery_soc")
-    power_kw = tel.get("battery_power") or 0.0
-    power_w = power_kw * 1000.0
-    batt_t = tel.get("battery_temperature")
+    # Le bateau (ecran.py) n'envoie jamais d'agregat "battery_soc"/"battery_power" :
+    # seulement battery1_soc/battery2_soc et les tensions/courants par branche.
+    # On derive l'agregat ici (meme logique que backend.py::flatten_nested), sinon
+    # soc reste None en permanence et la prediction ne se declenche jamais.
+    socs = [s for s in (tel.get("battery1_soc"), tel.get("battery2_soc")) if s is not None]
+    soc = (sum(socs) / len(socs)) if socs else tel.get("battery_soc")
+
+    v1, i1 = tel.get("battery1_voltage"), tel.get("battery1_current")
+    v2, i2 = tel.get("battery2_voltage"), tel.get("battery2_current")
+    power_w = 0.0
+    if v1 is not None and i1 is not None:
+        power_w += abs(v1 * i1)
+    if v2 is not None and i2 is not None:
+        power_w += abs(v2 * i2)
+    if power_w == 0.0:
+        power_w = (tel.get("battery_power") or 0.0) * 1000.0
+
+    batt_t = max(
+        (t for t in (tel.get("battery1_temp"), tel.get("battery2_temp"), tel.get("battery_temperature")) if t is not None),
+        default=None,
+    )
     mot_t = tel.get("motor_temperature")
     speed = tel.get("gps_speed_kmh") or 0.0
 
@@ -129,6 +189,8 @@ def _compute(tel: dict, wx: dict) -> dict:
         _batt_hist.append((now, batt_t))
     if mot_t is not None:
         _mot_hist.append((now, mot_t))
+    if soc is not None:
+        _soc_hist.append((now, soc))
 
     # ── Endurance model ───────────────────────────────────────────────────────
     # Physics: time = energy_remaining / power_consumed
@@ -147,7 +209,23 @@ def _compute(tel: dict, wx: dict) -> dict:
 
         energy_wh = (soc / 100.0) * BATTERY_CAPACITY_WH * temp_factor
         effective_w = power_w * wind_factor
-        hours = energy_wh / effective_w
+        hours_physics = energy_wh / effective_w
+
+        # Estimation live : declin REEL du SOC mesure pendant la navigation en cours.
+        # Plus fiable des que suffisamment de donnees sont accumulees (capture l'etat
+        # reel de la batterie sans avoir a modeliser temperature/vent/rendement).
+        live = _live_discharge_estimate(_soc_hist, soc)
+        if live is not None:
+            confidence = live["confidence"]
+            hours_live = live["time_remaining_s"] / 3600
+            # Blend progressif : au demarrage on fait confiance au modele physique
+            # calibre, puis on bascule vers la mesure live au fur et a mesure
+            # qu'elle couvre une fenetre significative (jusqu'a 30 min).
+            hours = confidence * hours_live + (1 - confidence) * hours_physics
+            method = "live" if confidence >= 0.8 else "blend"
+        else:
+            hours = hours_physics
+            method = "physics"
 
         endurance = {
             "time_remaining_s": int(hours * 3600),
@@ -155,6 +233,9 @@ def _compute(tel: dict, wx: dict) -> dict:
             "energy_remaining_wh": round(energy_wh),
             "temp_factor": round(temp_factor, 3),
             "wind_factor": round(wind_factor, 3),
+            "method": method,
+            "physics_time_remaining_s": int(hours_physics * 3600),
+            "live_discharge": live,
         }
     pred["endurance"] = endurance
 

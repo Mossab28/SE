@@ -114,7 +114,9 @@ services:
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
       MQTT_TOPIC: nereides/telemetry
-      BATTERY_CAPACITY_WH: "5000"
+      # Calibre sur un run reel (2026-07-03, 32min, SOC 95%->90%) : ~128 Wh/%SOC
+      # pour le pack complet (2 batteries en parallele) => ~12800 Wh.
+      BATTERY_CAPACITY_WH: "12800"
       RACE_TARGET_HOURS: "1.0"
     depends_on:
       - mosquitto

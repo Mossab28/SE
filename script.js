@@ -639,6 +639,15 @@ function renderPredictions(data) {
     end?.range_km != null ? end.range_km.toFixed(1) : "--";
   document.getElementById("ai-energy").textContent =
     end?.energy_remaining_wh != null ? end.energy_remaining_wh : "--";
+  const methodEl = document.getElementById("ai-endurance-method");
+  if (methodEl) {
+    const methodLabels = {
+      live: "mesure live (declin SOC reel)",
+      blend: "estimation mixte (calibrage + live)",
+      physics: "estimation calibree (pas encore assez de declin mesure)",
+    };
+    methodEl.textContent = end ? (methodLabels[end.method] || "restant") : "restant";
+  }
 
   // Thermal alerts
   const thermalEl = document.getElementById("ai-thermal");
