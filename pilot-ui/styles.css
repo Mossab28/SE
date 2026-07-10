@@ -65,6 +65,10 @@ body {
   background: rgba(5, 5, 5, 0.92);
 }
 
+.display-overlay[hidden] {
+  display: none;
+}
+
 .display-overlay-image {
   max-width: 90vw;
   max-height: 70vh;
