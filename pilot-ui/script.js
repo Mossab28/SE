@@ -65,7 +65,8 @@ function showDisplayOverlay(payload) {
   overlay.hidden = false;
 
   clearTimeout(displayOverlayTimer);
-  const durationMs = Math.max(1, Number(payload.duration_s) || 8) * 1000;
+  // Duree bornee (1s a 30s) : l'UI pilote est critique, l'overlay DOIT se refermer tout seul.
+  const durationMs = Math.min(30, Math.max(1, Number(payload.duration_s) || 5)) * 1000;
   displayOverlayTimer = window.setTimeout(function() {
     overlay.hidden = true;
   }, durationMs);

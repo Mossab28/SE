@@ -276,7 +276,7 @@ async def ingest_telemetry(raw: dict[str, Any]) -> dict[str, str]:
 class DisplayTrigger(BaseModel):
     text: str | None = None
     image_url: str | None = None
-    duration_s: float = 8.0
+    duration_s: float = 5.0
 
 
 @app.post("/trigger")
