@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nereides - Envoyer un message pilote</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #050505;
+  --panel: #101010;
+  --line: #2a2a2a;
+  --text: #f4f0e6;
+  --muted: #bdb49b;
+  --accent: #ffe600;
+  --ok: #72ff66;
+  --alert: #ff5a36;
+  --shadow: 0 14px 36px rgba(0, 0, 0, 0.38);
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: radial-gradient(circle at top, rgba(255, 230, 0, 0.1), transparent 24%),
+              linear-gradient(180deg, #151515 0%, #070707 55%, #000 100%);
+  color: var(--text);
+  font-family: "IBM Plex Sans", sans-serif;
+}
+.shell {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 24px 16px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+h1 {
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 28px;
+  margin: 8px 0 0;
+}
+.sub {
+  color: var(--muted);
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.card {
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  background: var(--panel);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+label {
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+input[type="text"], input[type="url"], textarea, input[type="number"] {
+  width: 100%;
+  background: #0a0a0a;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 15px;
+  font-family: inherit;
+}
+textarea { resize: vertical; min-height: 70px; }
+input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+.row { display: flex; gap: 12px; }
+.row > * { flex: 1; }
+button {
+  border: none;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: "Barlow Condensed", sans-serif;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  background: var(--accent);
+  color: #111;
+}
+button:active { transform: translateY(1px); }
+button:disabled { opacity: 0.5; cursor: default; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.presets button {
+  background: #1a1a1a;
+  color: var(--text);
+  border: 2px solid var(--line);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+}
+#status {
+  font-size: 14px;
+  min-height: 20px;
+}
+#status.ok { color: var(--ok); }
+#status.err { color: var(--alert); }
+#preview {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  display: none;
+}
+</style>
+</head>
+<body>
+  <div class="shell">
+    <h1>Nereides &mdash; Message pilote</h1>
+    <p class="sub">Envoie un texte / une image en overlay plein ecran sur l'ecran pilote embarque. Il revient automatiquement a la telemetrie apres la duree choisie.</p>
+
+    <div class="card">
+      <div>
+        <label for="text">Texte</label>
+        <textarea id="text" placeholder="Message a afficher..."></textarea>
+      </div>
+
+      <div>
+        <label for="image">Image (URL)</label>
+        <input type="url" id="image" placeholder="https://...jpg">
+        <img id="preview" alt="apercu">
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="duration">Duree (s)</label>
+          <input type="number" id="duration" value="8" min="1" max="30" step="1">
+        </div>
+      </div>
+
+      <div class="presets">
+        <button type="button" data-preset="Hello !">Hello</button>
+        <button type="button" data-preset="RAS, tout va bien.">RAS</button>
+        <button type="button" data-preset="Attention manoeuvre en cours.">Manoeuvre</button>
+        <button type="button" data-preset="Retour a quai demande.">Retour a quai</button>
+      </div>
+
+      <button id="send">Envoyer</button>
+      <div id="status"></div>
+    </div>
+  </div>
+
+  <script>
+    const BACKEND_URL = "https://nereides.pwn-ai.fr/backend/trigger";
+
+    const textEl = document.getElementById("text");
+    const imageEl = document.getElementById("image");
+    const durationEl = document.getElementById("duration");
+    const previewEl = document.getElementById("preview");
+    const statusEl = document.getElementById("status");
+    const sendBtn = document.getElementById("send");
+
+    imageEl.addEventListener("input", function() {
+      const url = imageEl.value.trim();
+      if (url) {
+        previewEl.src = url;
+        previewEl.style.display = "block";
+      } else {
+        previewEl.style.display = "none";
+      }
+    });
+
+    document.querySelectorAll(".presets button").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        textEl.value = btn.getAttribute("data-preset");
+      });
+    });
+
+    async function sendTrigger() {
+      const text = textEl.value.trim();
+      const imageUrl = imageEl.value.trim();
+      const durationS = Math.min(30, Math.max(1, Number(durationEl.value) || 8));
+
+      if (!text && !imageUrl) {
+        statusEl.textContent = "Ajoute un texte ou une image.";
+        statusEl.className = "err";
+        return;
+      }
+
+      sendBtn.disabled = true;
+      statusEl.textContent = "Envoi en cours...";
+      statusEl.className = "";
+
+      try {
+        const res = await fetch(BACKEND_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: text || null,
+            image_url: imageUrl || null,
+            duration_s: durationS,
+          }),
+        });
+        if (!res.ok) {
+          throw new Error("HTTP " + res.status);
+        }
+        statusEl.textContent = "Envoye. Affiche cote pilote pendant " + durationS + "s.";
+        statusEl.className = "ok";
+      } catch (err) {
+        statusEl.textContent = "Echec de l'envoi : " + err.message;
+        statusEl.className = "err";
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener("click", sendTrigger);
+  </script>
+</body>
+</html>
