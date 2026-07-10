@@ -52,6 +52,35 @@ body {
   gap: 10px;
 }
 
+.display-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  background: rgba(5, 5, 5, 0.92);
+}
+
+.display-overlay-image {
+  max-width: 90vw;
+  max-height: 70vh;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.display-overlay-text {
+  margin: 0;
+  max-width: 90vw;
+  text-align: center;
+  font-size: clamp(20px, 5vw, 48px);
+  font-weight: 600;
+  color: var(--text);
+}
+
 .signal-card {
   display: grid;
   gap: 4px;

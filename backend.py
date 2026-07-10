@@ -68,7 +68,10 @@ clients: set[WebSocket] = set()
 MQTT_HOST = os.getenv("MQTT_HOST")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "nereides/telemetry")
+MQTT_DISPLAY_TOPIC = os.getenv("MQTT_DISPLAY_TOPIC", "nereides/display")
 AI_PREDICTOR_URL = os.getenv("AI_PREDICTOR_URL", "http://localhost:8002")
+
+_mqtt_client: mqtt.Client | None = None
 
 
 NESTED_KEYS = ("Batterie1", "Batterie2", "CM", "GPS", "Thermistance")
@@ -220,7 +223,7 @@ def _on_mqtt_message(client, userdata, msg):
 
 @asynccontextmanager
 async def lifespan(app):
-    global _loop
+    global _loop, _mqtt_client
     _loop = asyncio.get_event_loop()
     if MQTT_HOST:
         mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
@@ -228,6 +231,7 @@ async def lifespan(app):
         mqtt_client.connect(MQTT_HOST, MQTT_PORT)
         mqtt_client.subscribe(MQTT_TOPIC, qos=1)
         mqtt_client.loop_start()
+        _mqtt_client = mqtt_client
         print(f"MQTT subscriber: {MQTT_HOST}:{MQTT_PORT}/{MQTT_TOPIC}")
     yield
 
@@ -267,6 +271,32 @@ async def ingest_telemetry(raw: dict[str, Any]) -> dict[str, str]:
     frame = TelemetryFrame(**flatten_nested(raw))
     await _process_frame(frame)
     return {"status": "accepted"}
+
+
+class DisplayTrigger(BaseModel):
+    text: str | None = None
+    image_url: str | None = None
+    duration_s: float = 8.0
+
+
+@app.post("/trigger")
+async def trigger_display(trigger: DisplayTrigger) -> dict[str, str]:
+    """Push a one-off overlay (text/image) to pilot screens.
+
+    Broadcast over the backend WS (dashboard clients) AND publish over MQTT so the
+    Raspberry Pi (ecran.py, which relays it to the local pilot-ui over ws://localhost:8765)
+    receives it too, even without a live connection to this backend.
+    """
+    message = {
+        "type": "display",
+        "text": trigger.text,
+        "image_url": trigger.image_url,
+        "duration_s": trigger.duration_s,
+    }
+    await broadcast(message)
+    if _mqtt_client is not None:
+        _mqtt_client.publish(MQTT_DISPLAY_TOPIC, json.dumps(message), qos=1)
+    return {"status": "sent"}
 
 
 @app.websocket("/ws")

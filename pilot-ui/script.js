@@ -43,6 +43,34 @@ const temporaryToneMap = {};
 
 // WebSocket local (ecran.py sur le meme Raspberry Pi)
 const WS_URL = "ws://localhost:8765";
+let displayOverlayTimer = null;
+
+function showDisplayOverlay(payload) {
+  const overlay = document.getElementById("display-overlay");
+  const imageNode = document.getElementById("display-overlay-image");
+  const textNode = document.getElementById("display-overlay-text");
+  if (!overlay || !imageNode || !textNode) {
+    return;
+  }
+
+  if (payload.image_url) {
+    imageNode.src = payload.image_url;
+    imageNode.hidden = false;
+  } else {
+    imageNode.hidden = true;
+    imageNode.removeAttribute("src");
+  }
+
+  textNode.textContent = payload.text || "";
+  overlay.hidden = false;
+
+  clearTimeout(displayOverlayTimer);
+  const durationMs = Math.max(1, Number(payload.duration_s) || 8) * 1000;
+  displayOverlayTimer = window.setTimeout(function() {
+    overlay.hidden = true;
+  }, durationMs);
+}
+
 
 function setText(id, value) {
   const node = document.getElementById(id);
@@ -289,6 +317,10 @@ function connectRealtime() {
   socket.addEventListener("message", function(event) {
     try {
       var raw = JSON.parse(event.data);
+      if (raw.type === "display") {
+        showDisplayOverlay(raw);
+        return;
+      }
       // ecran.py envoie du JSON plat, on le wrappe dans le format attendu
       applyPayload({
         connected: true,
