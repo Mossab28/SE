@@ -227,7 +227,7 @@ FIELD_MAP = {
 	("CM", "RPM"): "motor_speed",
 	("CM", "Current"): "motor_current",
 	("CM", "Tension"): "motor_voltage",
-	("CM", "ErrorCode"): "controller_safety",
+	("CM", "ErrorCode"): "controller_error_code",
 	("CM", "Commande"): "controller_mode",
 	("CM", "Feedback"): "controller_feedback",
 	("CM", "FNB"): "controller_fnb",
@@ -297,6 +297,15 @@ def flatten_and_map(payload):
 			for donnee, valeur in mesures.items():
 				key = FIELD_MAP.get((component, donnee), f"{component}_{donnee}".lower())
 				flat[key] = valeur
+
+	# controller_safety est un statut texte (Nominal/Fault), derive ici du code
+	# d'erreur brut plutot que d'envoyer l'entier directement dans ce champ.
+	if "controller_error_code" in flat:
+		try:
+			flat["controller_safety"] = "Nominal" if int(flat["controller_error_code"]) == 0 else "Fault"
+		except (TypeError, ValueError):
+			pass
+
 	return flat
 
 def send_to_vps(payload):

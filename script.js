@@ -8,9 +8,12 @@ const fields = {
   battery1_soc: "--",
   battery1_voltage: "--",
   battery1_current: "--",
+  battery1_temp: "--",
   battery2_soc: "--",
   battery2_voltage: "--",
   battery2_current: "--",
+  battery2_temp: "--",
+  solar_temperature: "--",
   motor_temperature: "--",
   motor_speed: "--",
   motor_current: "--",
@@ -49,6 +52,9 @@ const barConfig = {
   battery2_voltage: { min: 40, max: 55, warnBelow: 46, alertBelow: 44 },
   battery1_current: { min: 0, max: 120, warnAbove: 90, alertAbove: 110 },
   battery2_current: { min: 0, max: 120, warnAbove: 90, alertAbove: 110 },
+  battery1_temp: { min: 0, max: 60, warnAbove: 48, alertAbove: 53 },
+  battery2_temp: { min: 0, max: 60, warnAbove: 48, alertAbove: 53 },
+  solar_temperature: { min: 0, max: 90, warnAbove: 65, alertAbove: 80 },
   motor_temperature: { min: 0, max: 100, warnAbove: 75, alertAbove: 85 },
   motor_speed: { min: 0, max: 3500, warnAbove: 2800, alertAbove: 3200 },
   controller_power_request: { min: 0, max: 100, warnAbove: 75, alertAbove: 90 },
@@ -345,6 +351,14 @@ function markTelemetryUpdate() {
 window.dashboardBridge = {
   updateTelemetry(nextFields = {}) {
     Object.assign(fields, nextFields);
+    // battery_temperature (aggregat) n'est jamais envoye par le bateau : seules
+    // battery1_temp / battery2_temp existent reellement. On derive le max ici.
+    const t1 = parseFloat(fields.battery1_temp);
+    const t2 = parseFloat(fields.battery2_temp);
+    const temps = [t1, t2].filter((t) => !Number.isNaN(t));
+    if (temps.length) {
+      fields.battery_temperature = Math.max(...temps);
+    }
     renderFields();
     updateMap();
     markTelemetryUpdate();

@@ -143,8 +143,13 @@
           <div class="temperature-spotlight">
             <div class="general-info-grid">
               <div class="general-info-item">
-                <span class="readout-label">Temperature batteries</span>
+                <span class="readout-label">Temperature batteries (max)</span>
                 <strong class="spotlight-value compact-spotlight" data-field="battery_temperature">--</strong>
+                <span class="spotlight-unit">degC</span>
+              </div>
+              <div class="general-info-item">
+                <span class="readout-label">Panneaux solaires</span>
+                <strong class="spotlight-value compact-spotlight" data-field="solar_temperature">--</strong>
                 <span class="spotlight-unit">degC</span>
               </div>
             </div>
@@ -335,6 +340,12 @@
                 <span class="metric-unit">A</span>
                 <div class="metric-bar"><span data-bar="battery1_current"></span></div>
               </article>
+              <article class="metric-card" data-metric="battery1_temp">
+                <span class="metric-name">Temperature</span>
+                <strong class="metric-value" data-field="battery1_temp">--</strong>
+                <span class="metric-unit">degC</span>
+                <div class="metric-bar"><span data-bar="battery1_temp"></span></div>
+              </article>
             </div>
           </div>
           <div class="battery-branch">
@@ -357,6 +368,12 @@
                 <strong class="metric-value" data-field="battery2_current">--</strong>
                 <span class="metric-unit">A</span>
                 <div class="metric-bar"><span data-bar="battery2_current"></span></div>
+              </article>
+              <article class="metric-card" data-metric="battery2_temp">
+                <span class="metric-name">Temperature</span>
+                <strong class="metric-value" data-field="battery2_temp">--</strong>
+                <span class="metric-unit">degC</span>
+                <div class="metric-bar"><span data-bar="battery2_temp"></span></div>
               </article>
             </div>
           </div>

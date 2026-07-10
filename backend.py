@@ -15,7 +15,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSock
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import paho.mqtt.client as mqtt
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class TelemetryFrame(BaseModel):
@@ -33,9 +33,11 @@ class TelemetryFrame(BaseModel):
     battery1_soc: float | None = None
     battery1_voltage: float | None = None
     battery1_current: float | None = None
+    battery1_temp: float | None = None
     battery2_soc: float | None = None
     battery2_voltage: float | None = None
     battery2_current: float | None = None
+    battery2_temp: float | None = None
     motor_temperature: float | None = None
     motor_pressure: float | None = None
     motor_speed: float | None = None
@@ -58,6 +60,19 @@ class TelemetryFrame(BaseModel):
     gps_lng: float | None = None
     gps_speed_kmh: float | None = None
     gps_satellites: int | None = None
+
+    @field_validator(
+        "controller_mode", "controller_safety", "controller_fnb", "controller_feedback",
+        "boat_activity_duration", "timestamp", mode="before",
+    )
+    @classmethod
+    def _coerce_text_fields(cls, value: Any) -> Any:
+        """Le Pi envoie parfois un champ texte sous forme numerique (ex: ErrorCode brut
+        au lieu d'un statut). Sans ca, Pydantic rejette toute la trame et TOUS ses champs
+        sont perdus, pas seulement celui-ci."""
+        if value is None or isinstance(value, str):
+            return value
+        return str(value)
 
 
 latest_payload: dict[str, Any] = {
