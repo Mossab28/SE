@@ -18,8 +18,10 @@ const fields = {
   motor_speed: "--",
   motor_current: "--",
   motor_voltage: "--",
+  motor_power: "--",
   controller_mode: "--",
   controller_temperature: "--",
+  controller_current: "--",
   controller_power_request: "--",
   controller_efficiency: "--",
   controller_safety: "--",
@@ -359,6 +361,17 @@ window.dashboardBridge = {
     if (temps.length) {
       fields.battery_temperature = Math.max(...temps);
     }
+
+    // Aligne les champs prioritaires sur ceux calcules par pilot-ui (meme logique,
+    // memes valeurs affichees cote pilote et cote dashboard). Le bateau n'envoie
+    // jamais "controller_current" directement, seulement motor_current (CM/Current).
+    fields.controller_current = fields.motor_current;
+    const mv = parseFloat(fields.motor_voltage);
+    const mi = parseFloat(fields.motor_current);
+    if (!Number.isNaN(mv) && !Number.isNaN(mi)) {
+      fields.motor_power = Math.round(mv * mi);
+    }
+
     renderFields();
     updateMap();
     markTelemetryUpdate();
